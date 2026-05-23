@@ -4,15 +4,21 @@ import com.bidly.authservice.dto.RegisterRequest;
 import com.bidly.authservice.dto.RegisterResponse;
 import com.bidly.authservice.entity.Role;
 import com.bidly.authservice.entity.User;
+import com.bidly.authservice.entity.VerificationToken;
 import com.bidly.authservice.enums.Rolename;
 import com.bidly.authservice.exception.classes.EmailAlreadyExistsException;
+import com.bidly.authservice.exception.classes.TokenExpiredException;
 import com.bidly.authservice.repository.RoleRepository;
 import com.bidly.authservice.repository.UserRepository;
+import com.bidly.authservice.repository.VerificationTokenRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,13 +26,15 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final VerificationTokenRepository verificationTokenRepository;
 
+    @Transactional
     public RegisterResponse register(RegisterRequest registerRequest) {
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
             throw new EmailAlreadyExistsException("Email already exists");
         }
 
-        Role userRole = roleRepository.findByName(Rolename.USER.name())
+        Role userRole = roleRepository.findByName(Rolename.USER)
                 .orElseThrow(() -> new RuntimeException("User role not found"));
 
         User newUser = User.builder()
@@ -42,10 +50,52 @@ public class AuthService {
         userRepository.save(newUser);
 
         //Generete verif token(email)
+        String codUnic =  UUID.randomUUID().toString();
+        VerificationToken verificationToken = VerificationToken.builder()
+                .token(codUnic)
+                .user(newUser)
+                .expiryDate(LocalDateTime.now().plusHours(12))
+                .build();
 
+        verificationTokenRepository.save(verificationToken);
 
+        String confirmationLink = "http://localhost:8080/api/v1/auth/confirm?token=" + codUnic;
+        System.out.println("user conf link " + newUser.getEmail() + "link: " + confirmationLink);
 
+        return RegisterResponse.builder()
+                .message("User registered successfully. Please check your email to confirm your account.")
+                .email(newUser.getEmail())
+                .build();
+    }
 
-        return null;
+    @Transactional
+    public String confirmAccount(String token) {
+        VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid verification token"));
+
+        if (verificationToken.isExpired()) {
+            verificationTokenRepository.delete(verificationToken);
+            throw new TokenExpiredException("Token expired");
+        }
+
+        User user = verificationToken.getUser();
+        user.setEnabled(true);
+        userRepository.save(user);
+
+        verificationTokenRepository.delete(verificationToken);
+
+        return "Account confirmed successfully";
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
