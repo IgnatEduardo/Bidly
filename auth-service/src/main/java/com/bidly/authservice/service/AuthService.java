@@ -27,6 +27,7 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final VerificationTokenRepository verificationTokenRepository;
+    private final EmailService emailService;
 
     @Transactional
     public RegisterResponse register(RegisterRequest registerRequest) {
@@ -60,7 +61,7 @@ public class AuthService {
         verificationTokenRepository.save(verificationToken);
 
         String confirmationLink = "http://localhost:8080/api/v1/auth/confirm?token=" + codUnic;
-        System.out.println("user conf link " + newUser.getEmail() + "link: " + confirmationLink);
+        emailService.sendConfirmationEmail(newUser.getEmail(), confirmationLink);
 
         return RegisterResponse.builder()
                 .message("User registered successfully. Please check your email to confirm your account.")
