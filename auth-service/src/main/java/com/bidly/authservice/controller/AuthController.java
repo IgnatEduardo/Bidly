@@ -1,5 +1,7 @@
 package com.bidly.authservice.controller;
 
+import com.bidly.authservice.dto.LoginRequest;
+import com.bidly.authservice.dto.LoginResponse;
 import com.bidly.authservice.dto.RegisterRequest;
 import com.bidly.authservice.dto.RegisterResponse;
 import com.bidly.authservice.service.AuthService;
@@ -33,5 +35,10 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest loginRequest
+    ) {
+        return ResponseEntity.ok(authService.login(loginRequest));
+    }
 }
