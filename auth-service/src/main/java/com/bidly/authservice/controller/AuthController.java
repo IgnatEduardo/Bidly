@@ -1,9 +1,6 @@
 package com.bidly.authservice.controller;
 
-import com.bidly.authservice.dto.LoginRequest;
-import com.bidly.authservice.dto.LoginResponse;
-import com.bidly.authservice.dto.RegisterRequest;
-import com.bidly.authservice.dto.RegisterResponse;
+import com.bidly.authservice.dto.*;
 import com.bidly.authservice.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -40,5 +37,10 @@ public class AuthController {
             @Valid @RequestBody LoginRequest loginRequest
     ) {
         return ResponseEntity.ok(authService.login(loginRequest));
+    }
+
+    @PostMapping("/refresh-token")
+    public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest tokenRefreshRequest) {
+        return ResponseEntity.ok(authService.refreshToken(tokenRefreshRequest));
     }
 }

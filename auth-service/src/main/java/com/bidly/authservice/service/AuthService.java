@@ -1,10 +1,8 @@
 package com.bidly.authservice.service;
 
 import com.bidly.authservice.config.JwtService;
-import com.bidly.authservice.dto.LoginRequest;
-import com.bidly.authservice.dto.LoginResponse;
-import com.bidly.authservice.dto.RegisterRequest;
-import com.bidly.authservice.dto.RegisterResponse;
+import com.bidly.authservice.dto.*;
+import com.bidly.authservice.entity.RefreshToken;
 import com.bidly.authservice.entity.Role;
 import com.bidly.authservice.entity.User;
 import com.bidly.authservice.entity.VerificationToken;
@@ -17,8 +15,6 @@ import com.bidly.authservice.repository.UserRepository;
 import com.bidly.authservice.repository.VerificationTokenRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +31,7 @@ public class AuthService {
     private final VerificationTokenRepository verificationTokenRepository;
     private final EmailService emailService;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public RegisterResponse register(RegisterRequest registerRequest) {
@@ -112,13 +109,30 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
-        String jwtToken = jwtService.generateToken(user);
+        var accessToken = jwtService.generateToken(user);
+        var refreshToken = refreshTokenService.createRefreshToken(user.getUsername());
 
         return LoginResponse.builder()
-                .token(jwtToken)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken.getToken())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .build();
+    }
+
+    public TokenRefreshResponse refreshToken(TokenRefreshRequest refreshTokenRequest) {
+        return refreshTokenService.findByToken(refreshTokenRequest.getRefreshToken())
+                .map(refreshTokenService::verifyExpiration)
+                .map(RefreshToken::getUser)
+                .map(user -> {
+                    String accessToken = jwtService.generateToken(user);
+
+                    return TokenRefreshResponse.builder()
+                            .accessToken(accessToken)
+                            .refreshToken(refreshTokenRequest.getRefreshToken())
+                            .build();
+                })
+                .orElseThrow(() -> new RuntimeException("Refresh token is not in database"));
     }
 }
 
