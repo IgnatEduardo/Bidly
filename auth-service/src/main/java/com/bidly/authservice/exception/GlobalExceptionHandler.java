@@ -3,6 +3,7 @@ package com.bidly.authservice.exception;
 import com.bidly.authservice.exception.classes.EmailAlreadyExistsException;
 import com.bidly.authservice.exception.classes.InvalidTokenException;
 import com.bidly.authservice.exception.classes.TokenExpiredException;
+import com.bidly.authservice.exception.classes.UsernameAlreadyExistsException;
 import com.bidly.authservice.exception.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -15,7 +16,7 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(EmailAlreadyExistsException.class)
+    @ExceptionHandler({EmailAlreadyExistsException.class, UsernameAlreadyExistsException.class})
     public ResponseEntity<ErrorResponse> handleConflictExceptions(
             RuntimeException ex, HttpServletRequest request) {
 

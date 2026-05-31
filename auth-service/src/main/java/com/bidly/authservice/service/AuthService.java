@@ -1,18 +1,21 @@
 package com.bidly.authservice.service;
 
-import com.bidly.authservice.dto.RegisterRequest;
-import com.bidly.authservice.dto.RegisterResponse;
+import com.bidly.authservice.config.JwtService;
+import com.bidly.authservice.dto.*;
+import com.bidly.authservice.entity.RefreshToken;
 import com.bidly.authservice.entity.Role;
 import com.bidly.authservice.entity.User;
 import com.bidly.authservice.entity.VerificationToken;
 import com.bidly.authservice.enums.Rolename;
 import com.bidly.authservice.exception.classes.EmailAlreadyExistsException;
 import com.bidly.authservice.exception.classes.TokenExpiredException;
+import com.bidly.authservice.exception.classes.UsernameAlreadyExistsException;
 import com.bidly.authservice.repository.RoleRepository;
 import com.bidly.authservice.repository.UserRepository;
 import com.bidly.authservice.repository.VerificationTokenRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -28,11 +31,17 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final VerificationTokenRepository verificationTokenRepository;
     private final EmailService emailService;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public RegisterResponse register(RegisterRequest registerRequest) {
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
             throw new EmailAlreadyExistsException("Email already exists");
+        }
+
+        if (userRepository.existsByUsername(registerRequest.getUsername())) {
+            throw new UsernameAlreadyExistsException("Username already exists");
         }
 
         Role userRole = roleRepository.findByName(Rolename.USER)
@@ -44,6 +53,7 @@ public class AuthService {
                 .username(registerRequest.getUsername())
                 .email(registerRequest.getEmail())
                 .password(passwordEncoder.encode(registerRequest.getPassword()))
+                .phoneNumber(registerRequest.getPhoneNumber())
                 .enabled(false)
                 .rolename(Set.of(userRole))
                 .build();
@@ -60,7 +70,7 @@ public class AuthService {
 
         verificationTokenRepository.save(verificationToken);
 
-        String confirmationLink = "http://localhost:8080/api/v1/auth/confirm?token=" + codUnic;
+        String confirmationLink = "http://localhost:8081/api/v1/auth/confirm?token=" + codUnic;
         emailService.sendConfirmationEmail(newUser.getEmail(), confirmationLink);
 
         return RegisterResponse.builder()
@@ -86,6 +96,51 @@ public class AuthService {
         verificationTokenRepository.delete(verificationToken);
 
         return "Account confirmed successfully";
+    }
+
+    public LoginResponse login(LoginRequest loginRequest) {
+        User user = userRepository.findByUsername(loginRequest.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!user.isEnabled()) {
+            throw new RuntimeException("Please confirm your email before logging in.");
+        }
+
+        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            throw new RuntimeException("Invalid password");
+        }
+
+        var accessToken = jwtService.generateToken(user);
+        var refreshToken = refreshTokenService.createRefreshToken(user.getUsername());
+
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken.getToken())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .build();
+    }
+
+    public TokenRefreshResponse refreshToken(TokenRefreshRequest refreshTokenRequest) {
+        return refreshTokenService.findByToken(refreshTokenRequest.getRefreshToken())
+                .map(refreshTokenService::verifyExpiration)
+                .map(RefreshToken::getUser)
+                .map(user -> {
+                    String accessToken = jwtService.generateToken(user);
+
+                    return TokenRefreshResponse.builder()
+                            .accessToken(accessToken)
+                            .refreshToken(refreshTokenRequest.getRefreshToken())
+                            .build();
+                })
+                .orElseThrow(() -> new RuntimeException("Refresh token is not in database"));
+    }
+
+    @Transactional
+    public void logout(User user) {
+        refreshTokenService.deleteByUserId(user.getId());
+
+        SecurityContextHolder.clearContext();
     }
 }
 

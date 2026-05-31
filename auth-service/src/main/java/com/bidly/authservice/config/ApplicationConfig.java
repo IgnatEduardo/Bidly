@@ -1,5 +1,6 @@
 package com.bidly.authservice.config;
 
+import com.bidly.authservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,20 +18,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 @RequiredArgsConstructor
 public class ApplicationConfig {
+    private final UserRepository userRepository;
 
-    //just for testing
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> {
-            if ("andreiBiddly".equals(username)) {
-                return org.springframework.security.core.userdetails.User
-                        .withUsername("andreiBiddly")
-                        .password(passwordEncoder().encode("password1234"))
-                        .authorities("USER")
-                        .build();
-            }
-            throw new UsernameNotFoundException("User not found");
-        };
+        return username -> userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 
     @Bean
