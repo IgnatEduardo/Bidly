@@ -2,6 +2,7 @@ package com.bidly.authservice.repository;
 
 import com.bidly.authservice.entity.RefreshToken;
 import com.bidly.authservice.entity.User;
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.CrudRepository;
 
@@ -11,5 +12,6 @@ public interface RefreshTokenRepository extends CrudRepository<RefreshToken, Lon
     Optional<RefreshToken> findByToken(String token);
 
     @Modifying
+    @Transactional
     void deleteByUser(User user);
 }

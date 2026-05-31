@@ -15,6 +15,7 @@ import com.bidly.authservice.repository.UserRepository;
 import com.bidly.authservice.repository.VerificationTokenRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -133,6 +134,13 @@ public class AuthService {
                             .build();
                 })
                 .orElseThrow(() -> new RuntimeException("Refresh token is not in database"));
+    }
+
+    @Transactional
+    public void logout(User user) {
+        refreshTokenService.deleteByUserId(user.getId());
+
+        SecurityContextHolder.clearContext();
     }
 }
 

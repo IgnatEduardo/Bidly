@@ -1,11 +1,13 @@
 package com.bidly.authservice.controller;
 
 import com.bidly.authservice.dto.*;
+import com.bidly.authservice.entity.User;
 import com.bidly.authservice.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -42,5 +44,11 @@ public class AuthController {
     @PostMapping("/refresh-token")
     public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest tokenRefreshRequest) {
         return ResponseEntity.ok(authService.refreshToken(tokenRefreshRequest));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@AuthenticationPrincipal User user) {
+        authService.logout(user);
+        return ResponseEntity.ok("Logout successful");
     }
 }
