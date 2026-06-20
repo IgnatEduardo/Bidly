@@ -2,7 +2,7 @@ import axios from 'axios';
 
 //Global configuration for Axios instances
 const API = axios.create({
-  baseURL: 'http://localhost:8081/api/v1', //Target Gateway or Auth Service port
+  baseURL: 'http://localhost:8080/api/v1', //Target Gateway or Auth Service port
   headers: {
     'Content-Type': 'application/json',
   },
