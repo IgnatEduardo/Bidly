@@ -17,10 +17,17 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.bidly.auctionservice.config.RabbitMQConfig;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.bidly.auctionservice.client.UserClient;
+import com.bidly.auctionservice.dto.UserDto;
+import com.bidly.auctionservice.config.AuctionWebSocketHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -31,11 +38,31 @@ public class AuctionService {
     private final BiddingSessionRepository sessionRepository;
     private final BidRepository bidRepository;
     private final WalletService walletService;
+    private final UserClient userClient;
+    private final RabbitTemplate rabbitTemplate;
+    private final AuctionWebSocketHandler webSocketHandler;
+    private final ObjectMapper objectMapper;
 
     private static final BigDecimal ESCROW_RATE = new BigDecimal("0.10"); // 10% deposit required
 
+    private boolean isHighValueCategory(String category) {
+        if (category == null) return false;
+        String lower = category.toLowerCase().trim();
+        return lower.equals("real estate") || lower.equals("vehicles") 
+                || lower.equals("imobiliare") || lower.equals("auto")
+                || lower.equals("car") || lower.equals("house");
+    }
+
     @Transactional
     public ListingResponse createListing(ListingRequest request) {
+        // Enforce KYC check for high-value categories
+        if (isHighValueCategory(request.getCategory())) {
+            UserDto seller = userClient.getUserById(request.getSellerId());
+            if (seller == null || !Boolean.TRUE.equals(seller.getKycApproved())) {
+                throw new IllegalArgumentException("Sellers must be KYC-Approved to create listings in high-value categories like real estate or vehicles.");
+            }
+        }
+
         Listing listing = Listing.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -99,6 +126,14 @@ public class AuctionService {
             throw new InvalidBidException("Sellers cannot bid on their own listings");
         }
 
+        // Enforce KYC check for high-value categories
+        if (isHighValueCategory(listing.getCategory())) {
+            UserDto bidder = userClient.getUserById(request.getBidderId());
+            if (bidder == null || !Boolean.TRUE.equals(bidder.getKycApproved())) {
+                throw new InvalidBidException("Bidders must be KYC-Approved to place bids in high-value categories like real estate or vehicles.");
+            }
+        }
+
         // 2. Fetch current highest bid
         List<Bid> bids = bidRepository.findByBiddingSessionIdOrderByAmountDesc(session.getId());
         Bid currentHighestBid = bids.isEmpty() ? null : bids.get(0);
@@ -150,6 +185,53 @@ public class AuctionService {
         }
 
         sessionRepository.save(session);
+
+        // Broadcast WebSocket update
+        try {
+            String wsMessage = objectMapper.writeValueAsString(Map.of(
+                "type", "BID_PLACED",
+                "listingId", listingId,
+                "amount", request.getAmount(),
+                "bidderId", request.getBidderId(),
+                "endTime", session.getEndTime().toString(),
+                "currentHighestBid", request.getAmount(),
+                "active", session.getActive()
+            ));
+            webSocketHandler.broadcast(wsMessage);
+        } catch (Exception e) {
+            log.error("Failed to broadcast WebSocket message for bid: {}", e.getMessage());
+        }
+
+        // 8. Publish RabbitMQ events
+        try {
+            UserDto bidder = userClient.getUserById(request.getBidderId());
+            if (bidder != null) {
+                AuctionEventDto bidEvent = AuctionEventDto.builder()
+                        .type("BID_PLACED")
+                        .listingTitle(listing.getTitle())
+                        .recipientEmail(bidder.getEmail())
+                        .recipientName(bidder.getUsername())
+                        .amount(request.getAmount())
+                        .build();
+                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "auction.event.bid", bidEvent);
+            }
+
+            if (currentHighestBid != null) {
+                UserDto previousBidder = userClient.getUserById(currentHighestBid.getBidderId());
+                if (previousBidder != null) {
+                    AuctionEventDto outbidEvent = AuctionEventDto.builder()
+                            .type("OUTBID")
+                            .listingTitle(listing.getTitle())
+                            .recipientEmail(previousBidder.getEmail())
+                            .recipientName(previousBidder.getUsername())
+                            .amount(request.getAmount())
+                            .build();
+                    rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "auction.event.outbid", outbidEvent);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to publish RabbitMQ event for bid on session {}: {}", session.getId(), e.getMessage());
+        }
 
         return BidResponse.builder()
                 .id(bid.getId())
@@ -270,12 +352,87 @@ public class AuctionService {
                 listingId, escrowAmount, winnerBid.getBidderId(), listing.getSellerId());
     }
 
+    @Transactional
+    public void closeSession(BiddingSession session) {
+        session.setActive(false);
+        sessionRepository.save(session);
+        log.info("Closed expired bidding session {} for listing {}", session.getId(), session.getListing().getTitle());
+
+        // Broadcast WebSocket update
+        try {
+            String wsMessage = objectMapper.writeValueAsString(Map.of(
+                "type", "AUCTION_ENDED",
+                "listingId", session.getListing().getId(),
+                "active", false
+            ));
+            webSocketHandler.broadcast(wsMessage);
+        } catch (Exception e) {
+            log.error("Failed to broadcast WebSocket message for ended session: {}", e.getMessage());
+        }
+
+        try {
+            List<Bid> bids = bidRepository.findByBiddingSessionIdOrderByAmountDesc(session.getId());
+            if (!bids.isEmpty()) {
+                Bid winnerBid = bids.get(0);
+                UserDto winner = userClient.getUserById(winnerBid.getBidderId());
+                UserDto seller = userClient.getUserById(session.getListing().getSellerId());
+
+                if (winner != null) {
+                    AuctionEventDto winnerEvent = AuctionEventDto.builder()
+                            .type("AUCTION_ENDED")
+                            .listingTitle(session.getListing().getTitle())
+                            .recipientEmail(winner.getEmail())
+                            .recipientName(winner.getUsername())
+                            .amount(winnerBid.getAmount())
+                            .extraMessage("Congratulations! You won the auction. Please finalize checkout.")
+                            .build();
+                    rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "auction.event.ended", winnerEvent);
+                }
+
+                if (seller != null) {
+                    AuctionEventDto sellerEvent = AuctionEventDto.builder()
+                            .type("AUCTION_ENDED")
+                            .listingTitle(session.getListing().getTitle())
+                            .recipientEmail(seller.getEmail())
+                            .recipientName(seller.getUsername())
+                            .amount(winnerBid.getAmount())
+                            .extraMessage("Your auction has ended. Winner determined.")
+                            .build();
+                    rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "auction.event.ended", sellerEvent);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to publish RabbitMQ events for expired session {}: {}", session.getId(), e.getMessage());
+        }
+    }
+
     private ListingResponse mapToListingResponse(Listing listing) {
         BiddingSessionResponse sessionResponse = null;
         if (listing.getBiddingSession() != null) {
             BiddingSession session = listing.getBiddingSession();
             List<Bid> bids = bidRepository.findByBiddingSessionIdOrderByAmountDesc(session.getId());
             BigDecimal highestBid = bids.isEmpty() ? null : bids.get(0).getAmount();
+            Long highestBidderId = bids.isEmpty() ? null : bids.get(0).getBidderId();
+
+            java.util.Map<Long, String> usernameCache = new java.util.HashMap<>();
+            java.util.List<BidResponse> bidResponses = bids.stream().map(b -> {
+                String username = usernameCache.computeIfAbsent(b.getBidderId(), bidderId -> {
+                    try {
+                        UserDto user = userClient.getUserById(bidderId);
+                        return user != null ? user.getUsername() : "User " + bidderId;
+                    } catch (Exception e) {
+                        return "User " + bidderId;
+                    }
+                });
+                return BidResponse.builder()
+                        .id(b.getId())
+                        .biddingSessionId(session.getId())
+                        .bidderId(b.getBidderId())
+                        .bidderUsername(username)
+                        .amount(b.getAmount())
+                        .timestamp(b.getTimestamp())
+                        .build();
+            }).toList();
 
             sessionResponse = BiddingSessionResponse.builder()
                     .id(session.getId())
@@ -286,6 +443,8 @@ public class AuctionService {
                     .bidIncrement(session.getBidIncrement())
                     .active(session.getActive())
                     .currentHighestBid(highestBid)
+                    .currentHighestBidderId(highestBidderId)
+                    .bids(bidResponses)
                     .build();
         }
 
