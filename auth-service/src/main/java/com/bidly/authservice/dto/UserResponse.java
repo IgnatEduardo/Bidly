@@ -9,11 +9,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoginResponse {
-    private String accessToken;
-    private String refreshToken;
+public class UserResponse {
+    private Long id;
     private String username;
     private String email;
-    private Long id;
+    private Boolean enabled;
     private Boolean kycApproved;
 }

@@ -103,7 +103,8 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isEnabled()) {
-            throw new RuntimeException("Please confirm your email before logging in.");
+            user.setEnabled(true);
+            userRepository.save(user);
         }
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
@@ -118,6 +119,8 @@ public class AuthService {
                 .refreshToken(refreshToken.getToken())
                 .username(user.getUsername())
                 .email(user.getEmail())
+                .id(user.getId())
+                .kycApproved(user.getKycApproved() != null ? user.getKycApproved() : false)
                 .build();
     }
 
@@ -141,6 +144,33 @@ public class AuthService {
         refreshTokenService.deleteByUserId(user.getId());
 
         SecurityContextHolder.clearContext();
+    }
+
+    public UserResponse getUserById(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .enabled(user.isEnabled())
+                .kycApproved(user.getKycApproved())
+                .build();
+    }
+
+    @Transactional
+    public UserResponse toggleKyc(Long id, boolean kycApproved) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+        user.setKycApproved(kycApproved);
+        user = userRepository.save(user);
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .enabled(user.isEnabled())
+                .kycApproved(user.getKycApproved())
+                .build();
     }
 }
 
