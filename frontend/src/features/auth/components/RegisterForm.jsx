@@ -31,10 +31,11 @@ const RegisterForm = ({ onSwitch }) => {
       setPassword('');
       setPhoneNumber('');
     } catch (err) {
-      const backendMessage = err.response?.data?.message || 'Registration failed';
+
+      const backendMessage = err.response?.data?.message || err.message || 'Registration failed';
       setError(backendMessage);
-    } finally {
-      setLoading(false);
+      } finally {
+        setLoading(false);
     }
   };
 
