@@ -6,12 +6,15 @@ import com.bidly.auctionservice.exception.classes.InsufficientFundsException;
 import com.bidly.auctionservice.exception.classes.ResourceNotFoundException;
 import com.bidly.auctionservice.repository.UserWalletRepository;
 import com.bidly.auctionservice.repository.WalletTransactionRepository;
+import com.bidly.auctionservice.config.AuctionWebSocketHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +22,8 @@ public class WalletService {
 
     private final UserWalletRepository walletRepository;
     private final WalletTransactionRepository transactionRepository;
+    private final AuctionWebSocketHandler webSocketHandler;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public UserWallet getOrCreateWallet(Long userId) {
@@ -64,6 +69,20 @@ public class WalletService {
                 .build();
         transactionRepository.save(transaction);
 
+        // Broadcast WebSocket update
+        try {
+            String wsMessage = objectMapper.writeValueAsString(Map.of(
+                "type", "WALLET_TRANSACTION",
+                "userId", userId,
+                "txType", "DEPOSIT",
+                "amount", amount,
+                "message", String.format("📥 Successfully deposited $%s to your wallet!", amount)
+            ));
+            webSocketHandler.broadcast(wsMessage);
+        } catch (Exception e) {
+            // ignore
+        }
+
         return wallet;
     }
 
@@ -89,6 +108,20 @@ public class WalletService {
                 .timestamp(LocalDateTime.now())
                 .build();
         transactionRepository.save(transaction);
+
+        // Broadcast WebSocket update
+        try {
+            String wsMessage = objectMapper.writeValueAsString(Map.of(
+                "type", "WALLET_TRANSACTION",
+                "userId", userId,
+                "txType", "LOCK",
+                "amount", amount,
+                "message", String.format("🔒 Escrow locked: $%s for active bid.", amount)
+            ));
+            webSocketHandler.broadcast(wsMessage);
+        } catch (Exception e) {
+            // ignore
+        }
     }
 
     @Transactional
@@ -113,6 +146,20 @@ public class WalletService {
                 .timestamp(LocalDateTime.now())
                 .build();
         transactionRepository.save(transaction);
+
+        // Broadcast WebSocket update
+        try {
+            String wsMessage = objectMapper.writeValueAsString(Map.of(
+                "type", "WALLET_TRANSACTION",
+                "userId", userId,
+                "txType", "RELEASE",
+                "amount", amount,
+                "message", String.format("🔓 Escrow released: $%s returned to your balance.", amount)
+            ));
+            webSocketHandler.broadcast(wsMessage);
+        } catch (Exception e) {
+            // ignore
+        }
     }
 
     @Transactional
@@ -136,5 +183,19 @@ public class WalletService {
                 .timestamp(LocalDateTime.now())
                 .build();
         transactionRepository.save(transaction);
+
+        // Broadcast WebSocket update
+        try {
+            String wsMessage = objectMapper.writeValueAsString(Map.of(
+                "type", "WALLET_TRANSACTION",
+                "userId", userId,
+                "txType", "CHARGE",
+                "amount", amount,
+                "message", String.format("💸 Checkout payment charged: $%s.", amount)
+            ));
+            webSocketHandler.broadcast(wsMessage);
+        } catch (Exception e) {
+            // ignore
+        }
     }
 }

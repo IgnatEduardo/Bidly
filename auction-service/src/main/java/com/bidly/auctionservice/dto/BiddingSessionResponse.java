@@ -21,4 +21,6 @@ public class BiddingSessionResponse {
     private BigDecimal bidIncrement;
     private Boolean active;
     private BigDecimal currentHighestBid;
+    private Long currentHighestBidderId;
+    private java.util.List<BidResponse> bids;
 }

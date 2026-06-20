@@ -12,11 +12,9 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class BidResponse {
+public class WalletTransactionResponse {
     private Long id;
-    private Long biddingSessionId;
-    private Long bidderId;
-    private String bidderUsername;
     private BigDecimal amount;
+    private String type; // e.g. "DEPOSIT", "LOCK", "RELEASE", "CHARGE"
     private LocalDateTime timestamp;
 }
