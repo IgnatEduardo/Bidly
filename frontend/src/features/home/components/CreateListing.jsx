@@ -12,6 +12,18 @@ const CreateListing = ({ onBack, onSuccess }) => {
   const [buyItNowPrice, setBuyItNowPrice] = useState('');
   const [bidIncrement, setBidIncrement] = useState('10');
   
+  const getNowString = () => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+
+  const getSixMonthsLaterString = (baseDateStr) => {
+    if (!baseDateStr) return '';
+    const date = new Date(baseDateStr);
+    date.setMonth(date.getMonth() + 6);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+
   // Timestamps
   const [startTime, setStartTime] = useState(() => {
     const now = new Date();
@@ -35,8 +47,20 @@ const CreateListing = ({ onBack, onSuccess }) => {
     setError('');
     
     // Client-side validations
+    const now = new Date();
+    const minStart = new Date(now.getTime() - 60000); // 1-minute grace buffer for request delays
+    if (new Date(startTime) < minStart) {
+      setError('Start Time must be starting now or in the future.');
+      return;
+    }
     if (new Date(endTime) <= new Date(startTime)) {
       setError('End Time must be after Start Time.');
+      return;
+    }
+    const maxEnd = new Date(startTime);
+    maxEnd.setMonth(maxEnd.getMonth() + 6);
+    if (new Date(endTime) > maxEnd) {
+      setError('End Time must be at most 6 months from the Start Time.');
       return;
     }
     if (buyItNowPrice && parseFloat(buyItNowPrice) <= parseFloat(reservePrice)) {
@@ -58,8 +82,8 @@ const CreateListing = ({ onBack, onSuccess }) => {
         imageUrl: imageUrl || null,
         category,
         sellerId: parseInt(sellerId),
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
+        startTime,
+        endTime,
         reservePrice: parseFloat(reservePrice),
         buyItNowPrice: buyItNowPrice ? parseFloat(buyItNowPrice) : null,
         bidIncrement: parseFloat(bidIncrement)
@@ -188,6 +212,7 @@ const CreateListing = ({ onBack, onSuccess }) => {
                 type="datetime-local"
                 className="input-field"
                 value={startTime}
+                min={getNowString()}
                 onChange={(e) => setStartTime(e.target.value)}
                 required
               />
@@ -199,6 +224,8 @@ const CreateListing = ({ onBack, onSuccess }) => {
                 type="datetime-local"
                 className="input-field"
                 value={endTime}
+                min={startTime}
+                max={getSixMonthsLaterString(startTime)}
                 onChange={(e) => setEndTime(e.target.value)}
                 required
               />

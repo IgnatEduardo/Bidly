@@ -55,6 +55,20 @@ public class AuctionService {
 
     @Transactional
     public ListingResponse createListing(ListingRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+        // Enforce start date must be starting now/future (with a small 1-minute buffer for latency)
+        if (request.getStartTime().isBefore(now.minusMinutes(1))) {
+            throw new IllegalArgumentException("Start time must be starting now or in the future.");
+        }
+        // Enforce end time is after start time
+        if (request.getEndTime().isBefore(request.getStartTime())) {
+            throw new IllegalArgumentException("End time must be after the start time.");
+        }
+        // Enforce end time is at most 6 months from the start time
+        if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
+            throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
+        }
+
         // Enforce KYC check for high-value categories
         if (isHighValueCategory(request.getCategory())) {
             UserDto seller = userClient.getUserById(request.getSellerId());
@@ -92,17 +106,43 @@ public class AuctionService {
     }
 
     public Page<ListingResponse> getListings(Pageable pageable) {
+        log.debug("Entering getListings with pageable: {}", pageable);
         return listingRepository.findAll(pageable).map(this::mapToListingResponse);
     }
 
     public ListingResponse getListing(Long id) {
+        log.debug("Entering getListing for id: {}", id);
         Listing listing = listingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing not found with id: " + id));
         return mapToListingResponse(listing);
     }
 
+    @Transactional(readOnly = true)
+    public Page<BidResponse> getBidsForListing(Long listingId, Pageable pageable) {
+        log.debug("Entering getBidsForListing for listingId: {}, pageable: {}", listingId, pageable);
+        Listing listing = listingRepository.findById(listingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Listing not found with id: " + listingId));
+        
+        BiddingSession session = listing.getBiddingSession();
+        if (session == null) {
+            log.info("No bidding session found for listing: {}, returning empty page of bids", listingId);
+            return Page.empty();
+        }
+
+        Page<Bid> bids = bidRepository.findByBiddingSessionId(session.getId(), pageable);
+        log.debug("Found {} bids in DB for session: {}", bids.getNumberOfElements(), session.getId());
+        return bids.map(b -> BidResponse.builder()
+                .id(b.getId())
+                .biddingSessionId(session.getId())
+                .bidderId(b.getBidderId())
+                .amount(b.getAmount())
+                .timestamp(b.getTimestamp())
+                .build());
+    }
+
     @Transactional
     public BidResponse placeBid(Long listingId, BidRequest request) {
+        log.debug("Entering placeBid for listingId: {}, amount: {}, bidderId: {}", listingId, request.getAmount(), request.getBidderId());
         // Find listing
         Listing listing = listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing not found with id: " + listingId));
