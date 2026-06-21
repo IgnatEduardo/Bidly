@@ -36,10 +36,11 @@ const RegisterForm = ({ onSwitch }) => {
         onSwitch();
       }, 2000);
     } catch (err) {
-      const backendMessage = err.response?.data?.message || 'Registration failed';
+
+      const backendMessage = err.response?.data?.message || err.message || 'Registration failed';
       setError(backendMessage);
-    } finally {
-      setLoading(false);
+      } finally {
+        setLoading(false);
     }
   };
 
