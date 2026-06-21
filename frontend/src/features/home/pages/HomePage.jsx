@@ -1,17 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import API from '../../../api/axios';
-import Dashboard from '../components/Dashboard';
-import ListingDetails from '../components/ListingDetails';
-import CreateListing from '../components/CreateListing';
-import WalletPage from '../components/WalletPage';
-import MyListings from '../components/MyListings';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
 const HomePage = ({ onLogout }) => {
   const username = localStorage.getItem('username') || 'User';
   const userId = localStorage.getItem('userId');
   
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'details', 'create-listing', 'listings', 'bids', 'wallet'
-  const [selectedListingId, setSelectedListingId] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.startsWith('/home') || path.startsWith('/listings')) return 'dashboard';
+    if (path.startsWith('/my-listings')) return 'listings';
+    if (path.startsWith('/my-bids')) return 'bids';
+    if (path.startsWith('/wallet')) return 'wallet';
+    return 'dashboard';
+  };
+  const activeTab = getActiveTab();
+  const isHeroVisible = ['/home', '/my-listings', '/my-bids', '/wallet'].includes(location.pathname);
   
   // User Profile details
   const [userKyc, setUserKyc] = useState(false);
@@ -23,9 +30,23 @@ const HomePage = ({ onLogout }) => {
   // Stack of active push toasts
   const [toasts, setToasts] = useState([]);
 
+  // Session Notification History Widget
+  const [notificationHistory, setNotificationHistory] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [showNotificationsHistory, setShowNotificationsHistory] = useState(false);
+
   const addToast = (message, type = 'info') => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
+
+    // Add to session history
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setNotificationHistory((prev) => [{ id, message, type, time: timeString }, ...prev]);
+    
+    // Increment unread count only if history panel is closed
+    setUnreadNotificationsCount((prev) => (showNotificationsHistory ? 0 : prev + 1));
+
     setTimeout(() => {
       removeToast(id);
     }, 5000);
@@ -123,11 +144,11 @@ const HomePage = ({ onLogout }) => {
     onLogout();
   };
 
-  const navigateTo = (tab, listingId = null) => {
-    setActiveTab(tab);
-    if (listingId) {
-      setSelectedListingId(listingId);
-    }
+  const navigateTo = (tab) => {
+    if (tab === 'dashboard') navigate('/home');
+    else if (tab === 'listings') navigate('/my-listings');
+    else if (tab === 'bids') navigate('/my-bids');
+    else if (tab === 'wallet') navigate('/wallet');
     // Refresh balance on tab switch to be safe
     fetchWalletBalance();
   };
@@ -203,7 +224,7 @@ const HomePage = ({ onLogout }) => {
       </nav>
 
       {/* Hero Section */}
-      {['dashboard', 'listings', 'bids', 'wallet'].includes(activeTab) && (
+      {isHeroVisible && (
         <header className="hero-section">
           <h1 className="hero-title">Premium Bidding Platform</h1>
           <p className="hero-subtitle">Discover, bid, and win high-value listings securely in real-time.</p>
@@ -213,46 +234,55 @@ const HomePage = ({ onLogout }) => {
 
       {/* Main Content Area */}
       <main className="main-content">
-        {activeTab === 'dashboard' && (
-          <Dashboard 
-            onViewDetails={(id) => navigateTo('details', id)} 
-            onCreateClick={() => navigateTo('create-listing')}
-          />
-        )}
-        
-        {activeTab === 'details' && (
-          <ListingDetails 
-            listingId={selectedListingId} 
-            onBack={() => navigateTo('dashboard')} 
-            addToast={addToast}
-          />
-        )}
-        
-        {activeTab === 'create-listing' && (
-          <CreateListing 
-            onBack={() => navigateTo('dashboard')} 
-            onSuccess={() => navigateTo('dashboard')} 
-          />
-        )}
-        
-        {activeTab === 'listings' && (
-          <MyListings 
-            type="sales"
-            onViewDetails={(id) => navigateTo('details', id)} 
-          />
-        )}
-
-        {activeTab === 'bids' && (
-          <MyListings 
-            type="purchases"
-            onViewDetails={(id) => navigateTo('details', id)} 
-          />
-        )}
-        
-        {activeTab === 'wallet' && (
-          <WalletPage />
-        )}
+        <Outlet context={{ addToast }} />
       </main>
+
+      {/* Session Notification History Panel */}
+      {showNotificationsHistory && (
+        <div className="notification-history-panel">
+          <div className="notification-history-header">
+            <h3>🔔 Session Notifications</h3>
+            {notificationHistory.length > 0 && (
+              <button 
+                className="clear-history-btn" 
+                onClick={() => setNotificationHistory([])}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+          <div className="notification-history-list">
+            {notificationHistory.length === 0 ? (
+              <div className="notification-history-empty">
+                <span>📭</span>
+                <p>No notifications in this session.</p>
+              </div>
+            ) : (
+              notificationHistory.map((item) => (
+                <div key={item.id} className={`notification-history-item toast-${item.type}`}>
+                  <span>{item.message}</span>
+                  <span className="notification-history-time">{item.time}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Bell Button */}
+      <button 
+        className="notification-bell-btn" 
+        onClick={() => {
+          setShowNotificationsHistory(!showNotificationsHistory);
+          setUnreadNotificationsCount(0);
+        }}
+        title="Toggle Notification History"
+      >
+        🔔
+        {unreadNotificationsCount > 0 && (
+          <span className="notification-bell-badge">{unreadNotificationsCount}</span>
+        )}
+      </button>
     </div>
   );
 };

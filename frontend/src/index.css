@@ -947,7 +947,7 @@ body {
 /* Toast Messages Stack Container */
 .toasts-container {
   position: fixed;
-  bottom: 24px;
+  bottom: 90px;
   right: 24px;
   display: flex;
   flex-direction: column;
@@ -1578,4 +1578,174 @@ body {
   margin-bottom: 0;
   padding: 0.75rem;
   font-weight: 600;
+}
+
+/* ==========================================================================
+   Session Notification History Widget
+   ========================================================================== */
+
+.notification-bell-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: var(--primary-color, #4f46e5);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+  cursor: pointer;
+  z-index: 2100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5rem;
+  transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+  pointer-events: auto;
+}
+
+.notification-bell-btn:hover {
+  transform: scale(1.1);
+  background-color: var(--primary-hover-color, #4338ca);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6);
+}
+
+.notification-bell-btn:active {
+  transform: scale(0.95);
+}
+
+.notification-bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: var(--error-color, #ef4444);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  border-radius: 10px;
+  padding: 2px 6px;
+  border: 2px solid #11131e;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  animation: pulseBadge 2s infinite;
+}
+
+@keyframes pulseBadge {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.notification-history-panel {
+  position: fixed;
+  bottom: 85px;
+  right: 24px;
+  width: 360px;
+  max-height: 450px;
+  background-color: #1a1d29;
+  border: 1px solid var(--border-color, #2b3040);
+  border-radius: 12px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+  z-index: 2090;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUpHistory 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpHistory {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.notification-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #2b3040);
+  background-color: #151822;
+}
+
+.notification-history-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: white;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clear-history-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #8b949e);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.clear-history-btn:hover {
+  color: white;
+  background-color: rgba(255,255,255,0.05);
+}
+
+.notification-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 380px;
+}
+
+.notification-history-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted, #8b949e);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: #212535;
+  border-left: 4px solid var(--primary-color, #4f46e5);
+  font-size: 0.85rem;
+  color: #e6edf3;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transition: background-color 0.2s;
+}
+
+.notification-history-item:hover {
+  background-color: #282d40;
+}
+
+.notification-history-item.toast-success {
+  border-left-color: var(--success-color, #10b981);
+}
+
+.notification-history-item.toast-danger {
+  border-left-color: var(--error-color, #ef4444);
+}
+
+.notification-history-item.toast-info {
+  border-left-color: var(--primary-color, #4f46e5);
+}
+
+.notification-history-time {
+  align-self: flex-end;
+  font-size: 0.7rem;
+  color: var(--text-muted, #8b949e);
 }

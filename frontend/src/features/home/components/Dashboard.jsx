@@ -9,6 +9,7 @@ const Dashboard = ({ onViewDetails, onCreateClick }) => {
   // Filtering, Sorting, Pagination
   const [category, setCategory] = useState('All');
   const [sortBy, setSortBy] = useState('id,desc');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'live'
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   
@@ -27,18 +28,28 @@ const Dashboard = ({ onViewDetails, onCreateClick }) => {
         }
       });
       
+      let content = response.data.content || [];
+      
       // Filter client-side if a specific category is chosen
-      const content = response.data.content || [];
       if (category !== 'All') {
-        const filtered = content.filter(item => {
+        content = content.filter(item => {
           if (!item.category) return false;
           return item.category.toLowerCase() === category.toLowerCase();
         });
-        setListings(filtered);
-      } else {
-        setListings(content);
+      }
+
+      // Filter by status (live only) client-side if selected
+      if (statusFilter === 'live') {
+        content = content.filter(item => {
+          const session = item.biddingSession;
+          if (!session) return false;
+          const isSessionActive = session.active;
+          const isNotExpired = new Date(session.endTime) > new Date();
+          return isSessionActive && isNotExpired;
+        });
       }
       
+      setListings(content);
       setTotalPages(response.data.totalPages || 1);
     } catch (err) {
       console.error(err);
@@ -50,7 +61,7 @@ const Dashboard = ({ onViewDetails, onCreateClick }) => {
 
   useEffect(() => {
     fetchListings();
-  }, [category, sortBy, page]);
+  }, [category, sortBy, statusFilter, page]);
 
   // Dynamic countdown timer component helper inside mapping
   const CountdownTimer = ({ endTime, isActive }) => {
@@ -124,6 +135,18 @@ const Dashboard = ({ onViewDetails, onCreateClick }) => {
             <option value="id,desc">Newest First</option>
             <option value="id,asc">Oldest First</option>
           </select>
+
+          <select 
+            value={statusFilter} 
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
+            className="sort-select"
+          >
+            <option value="all">All Auctions</option>
+            <option value="live">Live Only</option>
+          </select>
           
           <button className="create-listing-btn" onClick={onCreateClick}>
             + Create Listing
@@ -139,11 +162,37 @@ const Dashboard = ({ onViewDetails, onCreateClick }) => {
       ) : error ? (
         <div className="alert alert-danger">{error}</div>
       ) : listings.length === 0 ? (
-        <div className="listings-placeholder">
-          <div className="placeholder-icon">🔍</div>
-          <h3>No Active Auctions</h3>
-          <p>We couldn't find any auctions matching your filter criteria. Be the first to create one!</p>
-          <button className="placeholder-btn" onClick={onCreateClick}>Create New Listing</button>
+        <div className="no-items-box">
+          <span className="no-items-icon">🔍</span>
+          {category !== 'All' || statusFilter !== 'all' ? (
+            <>
+              <h3>No Matches Found</h3>
+              <p>We couldn't find any auctions matching your filter criteria. Try resetting your filters.</p>
+              <button 
+                className="create-listing-btn" 
+                style={{ marginTop: '1rem', float: 'none', display: 'inline-block' }}
+                onClick={() => {
+                  setCategory('All');
+                  setStatusFilter('all');
+                  setPage(0);
+                }}
+              >
+                Clear Filters
+              </button>
+            </>
+          ) : (
+            <>
+              <h3>No Active Auctions</h3>
+              <p>There are no active auctions running at the moment. Be the first to list an item!</p>
+              <button 
+                className="create-listing-btn" 
+                style={{ marginTop: '1rem', float: 'none', display: 'inline-block' }} 
+                onClick={onCreateClick}
+              >
+                + Create Listing
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <>

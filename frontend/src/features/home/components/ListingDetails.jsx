@@ -110,6 +110,11 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
     e.preventDefault();
     setBidError('');
     setBidSuccess('');
+
+    if (isHighestBidder) {
+      setBidError('You are already the highest bidder.');
+      return;
+    }
     
     const parsedBid = parseFloat(bidAmount);
     if (isNaN(parsedBid) || parsedBid <= 0) {
@@ -319,8 +324,8 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
                     ⚠️ Placed bids lock an <strong>escrow deposit of 10%</strong> (${(parseFloat(bidAmount || 0) * 0.10).toFixed(2)}) from your wallet. If you are outbid, the escrow is immediately released back to you.
                   </div>
 
-                  <button type="submit" className="place-bid-btn" disabled={bidLoading}>
-                    {bidLoading ? 'Submitting Bid...' : 'Place Official Bid'}
+                  <button type="submit" className="place-bid-btn" disabled={bidLoading || isHighestBidder}>
+                    {bidLoading ? 'Submitting Bid...' : isHighestBidder ? 'You are Leading' : 'Place Official Bid'}
                   </button>
                 </form>
               )
