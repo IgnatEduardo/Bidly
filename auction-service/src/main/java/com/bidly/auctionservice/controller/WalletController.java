@@ -7,6 +7,11 @@ import com.bidly.auctionservice.entity.UserWallet;
 import com.bidly.auctionservice.service.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +21,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/auctions/wallets/{userId}")
 @RequiredArgsConstructor
+@Slf4j
 public class WalletController {
 
     private final WalletService walletService;
@@ -37,7 +43,9 @@ public class WalletController {
 
     @GetMapping
     public ResponseEntity<WalletResponse> getWallet(@PathVariable Long userId) {
+        log.debug("GET getWallet requested for userId: {}", userId);
         UserWallet wallet = walletService.getOrCreateWallet(userId);
+        log.info("Successfully fetched/created wallet for user: {}, balance: {}", userId, wallet.getBalance());
         return ResponseEntity.ok(WalletResponse.builder()
                 .userId(wallet.getUserId())
                 .balance(wallet.getBalance())
@@ -51,12 +59,30 @@ public class WalletController {
             @PathVariable Long userId,
             @Valid @RequestBody WalletDepositRequest request
     ) {
+        log.debug("POST depositFunds requested for userId: {}, amount: {}", userId, request.getAmount());
         UserWallet wallet = walletService.depositFunds(userId, request.getAmount());
+        log.info("Successfully deposited {} to wallet of user {}", request.getAmount(), userId);
         return ResponseEntity.ok(WalletResponse.builder()
                 .userId(wallet.getUserId())
                 .balance(wallet.getBalance())
                 .lockedBalance(wallet.getLockedBalance())
                 .transactions(mapTransactions(wallet))
                 .build());
+    }
+
+    @GetMapping("/transactions")
+    public ResponseEntity<Page<WalletTransactionResponse>> getTransactions(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "timestamp,desc") String[] sort
+    ) {
+        log.debug("GET getTransactions requested for userId: {}, page: {}, size: {}, sort: {}", userId, page, size, sort);
+        String sortField = sort[0];
+        Sort.Direction sortDirection = Sort.Direction.fromString(sort.length > 1 ? sort[1] : "desc");
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortField));
+        Page<WalletTransactionResponse> transactions = walletService.getTransactions(userId, pageable);
+        log.info("Fetched page {} of transactions for user {}, found {} elements", page, userId, transactions.getNumberOfElements());
+        return ResponseEntity.ok(transactions);
     }
 }

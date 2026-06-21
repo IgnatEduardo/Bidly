@@ -7,8 +7,12 @@ import com.bidly.auctionservice.exception.classes.ResourceNotFoundException;
 import com.bidly.auctionservice.repository.UserWalletRepository;
 import com.bidly.auctionservice.repository.WalletTransactionRepository;
 import com.bidly.auctionservice.config.AuctionWebSocketHandler;
+import com.bidly.auctionservice.dto.WalletTransactionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +22,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WalletService {
 
     private final UserWalletRepository walletRepository;
@@ -27,8 +32,10 @@ public class WalletService {
 
     @Transactional
     public UserWallet getOrCreateWallet(Long userId) {
+        log.debug("Entering getOrCreateWallet for userId: {}", userId);
         return walletRepository.findByUserId(userId)
                 .orElseGet(() -> {
+                    log.info("Creating new wallet for userId: {}", userId);
                     UserWallet newWallet = UserWallet.builder()
                             .userId(userId)
                             .balance(BigDecimal.ZERO)
@@ -40,8 +47,10 @@ public class WalletService {
 
     @Transactional
     public UserWallet getOrCreateWalletWithLock(Long userId) {
+        log.debug("Entering getOrCreateWalletWithLock for userId: {}", userId);
         return walletRepository.findByUserIdWithLock(userId)
                 .orElseGet(() -> {
+                    log.info("Creating new wallet with lock for userId: {}", userId);
                     UserWallet newWallet = UserWallet.builder()
                             .userId(userId)
                             .balance(BigDecimal.ZERO)
@@ -53,6 +62,7 @@ public class WalletService {
 
     @Transactional
     public UserWallet depositFunds(Long userId, BigDecimal amount) {
+        log.debug("Entering depositFunds for userId: {}, amount: {}", userId, amount);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Deposit amount must be greater than 0");
         }
@@ -88,12 +98,14 @@ public class WalletService {
 
     @Transactional
     public void lockFunds(Long userId, BigDecimal amount) {
+        log.debug("Entering lockFunds for userId: {}, amount: {}", userId, amount);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
 
         UserWallet wallet = getOrCreateWalletWithLock(userId);
         if (wallet.getBalance().compareTo(amount) < 0) {
+            log.error("Lock funds failed: user {} has insufficient balance {} for lock amount {}", userId, wallet.getBalance(), amount);
             throw new InsufficientFundsException("Insufficient funds. Required deposit of " + amount + " but only had " + wallet.getBalance());
         }
 
@@ -108,6 +120,7 @@ public class WalletService {
                 .timestamp(LocalDateTime.now())
                 .build();
         transactionRepository.save(transaction);
+        log.info("Locked ${} in escrow for user {}", amount, userId);
 
         // Broadcast WebSocket update
         try {
@@ -120,18 +133,20 @@ public class WalletService {
             ));
             webSocketHandler.broadcast(wsMessage);
         } catch (Exception e) {
-            // ignore
+            log.error("Failed to broadcast lock WebSocket update: {}", e.getMessage());
         }
     }
 
     @Transactional
     public void releaseFunds(Long userId, BigDecimal amount) {
+        log.debug("Entering releaseFunds for userId: {}, amount: {}", userId, amount);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
 
         UserWallet wallet = getOrCreateWalletWithLock(userId);
         if (wallet.getLockedBalance().compareTo(amount) < 0) {
+            log.error("Release funds failed: user {} has locked balance {} less than release amount {}", userId, wallet.getLockedBalance(), amount);
             throw new IllegalArgumentException("Cannot release " + amount + " since only " + wallet.getLockedBalance() + " is locked");
         }
 
@@ -146,6 +161,7 @@ public class WalletService {
                 .timestamp(LocalDateTime.now())
                 .build();
         transactionRepository.save(transaction);
+        log.info("Released ${} from escrow for user {}", amount, userId);
 
         // Broadcast WebSocket update
         try {
@@ -158,18 +174,20 @@ public class WalletService {
             ));
             webSocketHandler.broadcast(wsMessage);
         } catch (Exception e) {
-            // ignore
+            log.error("Failed to broadcast release WebSocket update: {}", e.getMessage());
         }
     }
 
     @Transactional
     public void chargeFunds(Long userId, BigDecimal amount) {
+        log.debug("Entering chargeFunds for userId: {}, amount: {}", userId, amount);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
 
         UserWallet wallet = getOrCreateWalletWithLock(userId);
         if (wallet.getLockedBalance().compareTo(amount) < 0) {
+            log.error("Charge funds failed: user {} has locked balance {} less than charge amount {}", userId, wallet.getLockedBalance(), amount);
             throw new IllegalArgumentException("Cannot charge " + amount + " since only " + wallet.getLockedBalance() + " is locked");
         }
 
@@ -183,6 +201,7 @@ public class WalletService {
                 .timestamp(LocalDateTime.now())
                 .build();
         transactionRepository.save(transaction);
+        log.info("Charged ${} checkout payment from user {}", amount, userId);
 
         // Broadcast WebSocket update
         try {
@@ -195,7 +214,22 @@ public class WalletService {
             ));
             webSocketHandler.broadcast(wsMessage);
         } catch (Exception e) {
-            // ignore
+            log.error("Failed to broadcast charge WebSocket update: {}", e.getMessage());
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<WalletTransactionResponse> getTransactions(Long userId, Pageable pageable) {
+        log.debug("Entering getTransactions for userId: {}, pageable: {}", userId, pageable);
+        return transactionRepository.findByUserWalletUserId(userId, pageable)
+                .map(t -> {
+                    log.debug("Mapping WalletTransaction {} to response DTO", t.getId());
+                    return WalletTransactionResponse.builder()
+                            .id(t.getId())
+                            .amount(t.getAmount())
+                            .type(t.getType())
+                            .timestamp(t.getTimestamp())
+                            .build();
+                });
     }
 }
