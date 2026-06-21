@@ -178,6 +178,10 @@ public class AuctionService {
         List<Bid> bids = bidRepository.findByBiddingSessionIdOrderByAmountDesc(session.getId());
         Bid currentHighestBid = bids.isEmpty() ? null : bids.get(0);
 
+        if (currentHighestBid != null && currentHighestBid.getBidderId().equals(request.getBidderId())) {
+            throw new InvalidBidException("You are already the highest bidder");
+        }
+
         BigDecimal minRequiredBid;
         if (currentHighestBid == null) {
             minRequiredBid = session.getReservePrice();
