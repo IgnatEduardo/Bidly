@@ -33,4 +33,18 @@ logging:
   level:
     io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProviders: OFF
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus"
+  security:
+    enabled: false
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 
