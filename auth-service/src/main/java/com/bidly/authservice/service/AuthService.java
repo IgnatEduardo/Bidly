@@ -79,7 +79,7 @@ public class AuthService {
 
         verificationTokenRepository.save(verificationToken);
 
-        String confirmationLink = "http://localhost:8081/api/v1/auth/confirm?token=" + codUnic;
+        String confirmationLink = "http://localhost:5173/confirm-account?token=" + codUnic;
         emailService.sendConfirmationEmail(newUser.getEmail(), confirmationLink);
         log.info("Verification email sent to {}", newUser.getEmail());
 

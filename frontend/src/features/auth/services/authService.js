@@ -19,6 +19,11 @@ export const authService = {
     return response.data;
   },
 
+  confirmAccount: async (token) => {
+    const response = await API.get(`/auth/confirm?token=${token}`);
+    return response.data;
+  },
+
   logout: async () => {
     const response = await API.post('/auth/logout');
     return response.data;
