@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { authService } from '../services/authService';
 
-const LoginForm = ({ onSwitch }) => {
+const LoginForm = ({ onSwitch, onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,8 +17,10 @@ const LoginForm = ({ onSwitch }) => {
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('username', data.username);
+      localStorage.setItem('userId', data.id);
+      localStorage.setItem('kycApproved', data.kycApproved);
       
-      alert(`Welcome back, ${data.username}!`);
+      onLoginSuccess();
     } catch (err) {
       const backendMessage = err.response?.data?.message || 'Invalid credentials';
       setError(backendMessage);

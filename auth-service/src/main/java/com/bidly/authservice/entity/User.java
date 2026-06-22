@@ -40,8 +40,13 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String phoneNumber;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean enabled = true;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean kycApproved = false;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
