@@ -51,4 +51,17 @@ public class AuthController {
         authService.logout(user);
         return ResponseEntity.ok("Logout successful");
     }
+
+    @PostMapping("/users/{id}/kyc")
+    public ResponseEntity<UserResponse> toggleKyc(
+            @PathVariable Long id,
+            @RequestParam boolean approved
+    ) {
+        return ResponseEntity.ok(authService.toggleKyc(id, approved));
+    }
+
+    @GetMapping("/users/{id}")
+    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
+        return ResponseEntity.ok(authService.getUserById(id));
+    }
 }

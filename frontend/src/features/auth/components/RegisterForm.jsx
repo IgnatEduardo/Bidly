@@ -30,6 +30,11 @@ const RegisterForm = ({ onSwitch }) => {
       setEmail('');
       setPassword('');
       setPhoneNumber('');
+
+      // Redirect to login after 2 seconds
+      setTimeout(() => {
+        onSwitch();
+      }, 2000);
     } catch (err) {
 
       const backendMessage = err.response?.data?.message || err.message || 'Registration failed';
