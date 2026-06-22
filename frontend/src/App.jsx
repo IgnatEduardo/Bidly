@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import LoginPage from './features/auth/pages/LoginPage';
+import ConfirmAccountPage from './features/auth/pages/ConfirmAccountPage'; 
 import HomePage from './features/home/pages/HomePage';
 import Dashboard from './features/home/components/Dashboard';
 import ListingDetails from './features/home/components/ListingDetails';
@@ -79,6 +80,12 @@ function App() {
         <Route 
           path="/login" 
           element={isAuthenticated ? <Navigate to="/home" replace /> : <LoginPage onLoginSuccess={handleLoginSuccess} />} 
+        />
+
+          {/* Confirmation Route */}
+        <Route 
+          path="/confirm-account" 
+          element={<ConfirmAccountPage />} 
         />
 
         {/* Protected Routes inside HomePage Layout */}
