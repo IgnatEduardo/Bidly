@@ -54,6 +54,12 @@ public class AuthController {
         return ResponseEntity.ok("Logout successful");
     }
 
+    @GetMapping("/users/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
+    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
+        return  ResponseEntity.ok(authService.getUserById(id));
+    }
+
     @PutMapping("/users/{id}")
     @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<UpdateUserResponse> updateUser(
