@@ -93,5 +93,50 @@ class AuthControllerUnitTest {
         assertEquals(200, r2.getStatusCodeValue());
         assertEquals("u", r2.getBody().getUsername());
     }
+
+    @Test
+    void updateUser_returnsOk() {
+        UpdateUserRequest request = new UpdateUserRequest();
+        request.setUsername("newuser");
+        request.setEmail("new@example.com");
+        request.setPhoneNumber("0799999999");
+
+        UserResponse userResponse = UserResponse.builder()
+                .id(1L)
+                .username("newuser")
+                .email("new@example.com")
+                .enabled(true)
+                .kycApproved(true)
+                .build();
+
+        UpdateUserResponse response = UpdateUserResponse.builder()
+                .user(userResponse)
+                .accessToken("newAccessToken")
+                .build();
+
+        when(authService.updateUser(1L, request)).thenReturn(response);
+
+        ResponseEntity<UpdateUserResponse> result = controller.updateUser(1L, request);
+
+        assertEquals(200, result.getStatusCodeValue());
+        assertNotNull(result.getBody());
+        assertEquals("newuser", result.getBody().getUser().getUsername());
+        assertEquals("new@example.com", result.getBody().getUser().getEmail());
+        assertEquals("newAccessToken", result.getBody().getAccessToken());
+
+        verify(authService).updateUser(1L, request);
+    }
+
+    @Test
+    void deleteUser_returnsNoContent() {
+        doNothing().when(authService).deleteUser(1L);
+
+        ResponseEntity<Void> result = controller.deleteUser(1L);
+
+        assertEquals(204, result.getStatusCodeValue());
+        assertNull(result.getBody());
+
+        verify(authService).deleteUser(1L);
+    }
 }
 
