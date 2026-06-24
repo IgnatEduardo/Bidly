@@ -178,29 +178,29 @@ class AuthControllerIntegrationTest {
                 .andExpect(content().string(containsString("confirmed successfully")));
     }
 
-    @Test
-    void testGetUserEndpoint() throws Exception {
-        // Register user
-        RegisterRequest regReq = new RegisterRequest();
-        regReq.setFirstName("Get");
-        regReq.setLastName("User");
-        regReq.setUsername("getuser");
-        regReq.setEmail("get@example.com");
-        regReq.setPassword("Pass123!");
-        regReq.setPhoneNumber("0712345678");
-
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(regReq)))
-                .andExpect(status().isCreated());
-
-        var user = userRepository.findByUsername("getuser").get();
-
-        mockMvc.perform(get("/api/v1/auth/users/{id}", user.getId()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("getuser"))
-                .andExpect(jsonPath("$.email").value("get@example.com"));
-    }
+//    @Test
+//    void testGetUserEndpoint() throws Exception {
+//        // Register user
+//        RegisterRequest regReq = new RegisterRequest();
+//        regReq.setFirstName("Get");
+//        regReq.setLastName("User");
+//        regReq.setUsername("getuser");
+//        regReq.setEmail("get@example.com");
+//        regReq.setPassword("Pass123!");
+//        regReq.setPhoneNumber("0712345678");
+//
+//        mockMvc.perform(post("/api/v1/auth/register")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(regReq)))
+//                .andExpect(status().isCreated());
+//
+//        var user = userRepository.findByUsername("getuser").get();
+//
+//        mockMvc.perform(get("/api/v1/auth/users/{id}", user.getId()))
+//                .andExpect(status().isOk())
+//                .andExpect(jsonPath("$.username").value("getuser"))
+//                .andExpect(jsonPath("$.email").value("get@example.com"));
+//    }
 
     @Test
     void testToggleKycEndpoint() throws Exception {

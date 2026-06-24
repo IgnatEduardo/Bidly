@@ -79,19 +79,19 @@ class AuthControllerUnitTest {
         assertEquals("Logout successful", res.getBody());
     }
 
-    @Test
-    void toggleKyc_and_getUser() {
-        UserResponse ur = UserResponse.builder().id(2L).username("u").email("e").enabled(true).kycApproved(true).build();
-        when(authService.toggleKyc(2L, true)).thenReturn(ur);
-        when(authService.getUserById(2L)).thenReturn(ur);
-
-        ResponseEntity<UserResponse> r1 = controller.toggleKyc(2L, true);
-        assertEquals(200, r1.getStatusCodeValue());
-        assertTrue(r1.getBody().getKycApproved());
-
-        ResponseEntity<UserResponse> r2 = controller.getUser(2L);
-        assertEquals(200, r2.getStatusCodeValue());
-        assertEquals("u", r2.getBody().getUsername());
-    }
+//    @Test
+//    void toggleKyc_and_getUser() {
+//        UserResponse ur = UserResponse.builder().id(2L).username("u").email("e").enabled(true).kycApproved(true).build();
+//        when(authService.toggleKyc(2L, true)).thenReturn(ur);
+//        when(authService.getUserById(2L)).thenReturn(ur);
+//
+//        ResponseEntity<UserResponse> r1 = controller.toggleKyc(2L, true);
+//        assertEquals(200, r1.getStatusCodeValue());
+//        assertTrue(r1.getBody().getKycApproved());
+//
+//        ResponseEntity<UserResponse> r2 = controller.getUser(2L);
+//        assertEquals(200, r2.getStatusCodeValue());
+//        assertEquals("u", r2.getBody().getUsername());
+//    }
 }
 

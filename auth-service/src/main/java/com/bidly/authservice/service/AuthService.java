@@ -196,6 +196,71 @@ public class AuthService {
                 .kycApproved(user.getKycApproved())
                 .build();
     }
+
+    @Transactional
+    public UpdateUserResponse updateUser(Long id, UpdateUserRequest request) {
+        log.info("Updating specific fields for user with id={}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+
+        if (request.getUsername() != null && !request.getUsername().trim().isEmpty()) {
+            if (!request.getUsername().equals(user.getUsername())) {
+                if (userRepository.existsByUsername(request.getUsername())) {
+                    throw new UsernameAlreadyExistsException("Username already exists");
+                }
+                user.setUsername(request.getUsername());
+                log.info("User id={} changed username to: {}", id, request.getUsername());
+            }
+        }
+
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            if (!request.getEmail().equals(user.getEmail())) {
+                if (userRepository.existsByEmail(request.getEmail())) {
+                    throw new EmailAlreadyExistsException("Email already exists");
+                }
+                user.setEmail(request.getEmail());
+                log.info("User id={} changed email to: {}", id, request.getEmail());
+            }
+        }
+
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().trim().isEmpty()) {
+            user.setPhoneNumber(request.getPhoneNumber());
+            log.info("User id={} changed phone number to: {}", id, request.getPhoneNumber());
+        }
+
+        user = userRepository.save(user);
+
+        String newAccessToken = jwtService.generateToken(user);
+
+        return UpdateUserResponse.builder()
+                .user(UserResponse.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .enabled(user.isEnabled())
+                        .kycApproved(user.getKycApproved())
+                        .build())
+                .accessToken(newAccessToken)
+                .build();
+    }
+
+    @Transactional
+    public void deleteUser(Long id) {
+        log.info("Deleting user with id={}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+
+        refreshTokenService.deleteByUserId(id);
+
+        verificationTokenRepository.findByUser(user)
+                .ifPresent(verificationTokenRepository::delete);
+
+        userRepository.delete(user);
+
+        log.info("User with id={} and all associated tokens deleted successfully", id);
+    }
 }
 
 
