@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # --- Reverse Proxy with Automatic SSL ---
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - gateway-service
+
+  # --- Infrastructure Dependencies ---
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: postgres-auth-prod
+    restart: always
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-auth-data:/var/lib/postgresql/data
+
+  postgres-auction:
+    image: postgres:16-alpine
+    container_name: postgres-auction-prod
+    restart: always
+    environment:
+      POSTGRES_DB: auction_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-auction-data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-prod
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+
+  # --- Microservices (Pulled from GHCR) ---
+  discovery-service:
+    image: ghcr.io/${GH_OWNER}/bidly-discovery-service:latest
+    container_name: discovery-service-prod
+    restart: always
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway-service:
+    image: ghcr.io/${GH_OWNER}/bidly-gateway-service:latest
+    container_name: gateway-service-prod
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service-prod:8761/eureka
+      # Overrides gateway routing list indices to point to docker container names
+      - SPRING_CLOUD_GATEWAY_ROUTES_0_URI=http://auth-service-prod:8081
+      - SPRING_CLOUD_GATEWAY_ROUTES_1_URI=http://auction-service-prod:8082
+      - SPRING_CLOUD_GATEWAY_ROUTES_2_URI=ws://auction-service-prod:8082
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+
+  auth-service:
+    image: ghcr.io/${GH_OWNER}/bidly-auth-service:latest
+    container_name: auth-service-prod
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service-prod:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-auth-prod:5432/auth_db
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_MAIL_HOST=${SMTP_HOST}
+      - SPRING_MAIL_PORT=${SMTP_PORT}
+      - SPRING_MAIL_USERNAME=${SMTP_USER}
+      - SPRING_MAIL_PASSWORD=${SMTP_PASSWORD}
+    depends_on:
+      - postgres-auth
+      - discovery-service
+
+  auction-service:
+    image: ghcr.io/${GH_OWNER}/bidly-auction-service:latest
+    container_name: auction-service-prod
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service-prod:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-auction-prod:5432/auction_db
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_RABBITMQ_HOST=rabbitmq-prod
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+    depends_on:
+      - postgres-auction
+      - rabbitmq
+      - discovery-service
+
+  notification-service:
+    image: ghcr.io/${GH_OWNER}/bidly-notification-service:latest
+    container_name: notification-service-prod
+    restart: always
+    ports:
+      - "8083:8083"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service-prod:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-auth-prod:5432/auth_db
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_RABBITMQ_HOST=rabbitmq-prod
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - SPRING_MAIL_HOST=${SMTP_HOST}
+      - SPRING_MAIL_PORT=${SMTP_PORT}
+      - SPRING_MAIL_USERNAME=${SMTP_USER}
+      - SPRING_MAIL_PASSWORD=${SMTP_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  frontend:
+    image: ghcr.io/${GH_OWNER}/bidly-frontend:latest
+    container_name: frontend-prod
+    restart: always
+    ports:
+      - "3000:80"
+
+volumes:
+  pg-auth-data:
+  pg-auction-data:
+  caddy_data:
+  caddy_config:

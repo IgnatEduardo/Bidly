@@ -1,8 +1,9 @@
 import axios from 'axios';
 
 //Global configuration for Axios instances
+const apiHost = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const API = axios.create({
-  baseURL: 'http://localhost:8080/api/v1', //gateway
+  baseURL: `${apiHost.replace(/\/$/, '')}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },

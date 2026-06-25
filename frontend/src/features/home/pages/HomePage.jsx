@@ -115,8 +115,10 @@ const HomePage = ({ onLogout }) => {
   // Connect to global WebSocket to capture user transaction notifications
   useEffect(() => {
     if (!userId) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws/auctions`;
+    const apiHost = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    const wsProtocol = apiHost.startsWith('https') ? 'wss:' : 'ws:';
+    const hostOnly = apiHost.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const wsUrl = `${wsProtocol}//${hostOnly}/ws/auctions`;
     
     console.log(`Connecting global homepage WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);

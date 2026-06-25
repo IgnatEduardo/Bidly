@@ -59,8 +59,10 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
 
   // Connect to WebSocket via Gateway for real-time list refreshes
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws/auctions`;
+    const apiHost = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    const wsProtocol = apiHost.startsWith('https') ? 'wss:' : 'ws:';
+    const hostOnly = apiHost.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const wsUrl = `${wsProtocol}//${hostOnly}/ws/auctions`;
     
     console.log(`Connecting details to WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);
