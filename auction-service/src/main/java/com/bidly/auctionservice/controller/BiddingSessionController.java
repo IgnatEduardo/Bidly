@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,12 +19,14 @@ public class BiddingSessionController {
     private final AuctionService auctionService;
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<BiddingSessionResponse> getSession(@PathVariable Long id) {
         log.debug("GET getSession requested for id: {}", id);
         return ResponseEntity.ok(auctionService.getSessionById(id));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<BiddingSessionResponse> updateSession(
             @PathVariable Long id,
             @Valid @RequestBody BiddingSessionRequest request
@@ -33,6 +36,7 @@ public class BiddingSessionController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Void> deleteSession(@PathVariable Long id) {
         log.debug("DELETE deleteSession requested for id: {}", id);
         auctionService.deleteSession(id);

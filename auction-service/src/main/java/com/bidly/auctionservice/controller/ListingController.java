@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,17 +23,20 @@ public class ListingController {
     private final AuctionService auctionService;
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<ListingResponse> createListing(@Valid @RequestBody ListingRequest request) {
         ListingResponse response = auctionService.createListing(request);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<ListingResponse> getListing(@PathVariable Long id) {
         return ResponseEntity.ok(auctionService.getListing(id));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Page<ListingResponse>> getListings(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -46,6 +50,7 @@ public class ListingController {
     }
 
     @PostMapping("/{id}/confirm")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<ListingResponse> confirmSale(
             @PathVariable Long id,
             @RequestParam Long sellerId,
@@ -55,6 +60,7 @@ public class ListingController {
     }
 
     @PostMapping("/{id}/checkout")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<ListingResponse> finalizeCheckout(
             @PathVariable Long id,
             @RequestParam Long winnerId
@@ -63,12 +69,14 @@ public class ListingController {
     }
 
     @PostMapping("/{id}/forfeit")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Void> handleForfeiture(@PathVariable Long id) {
         auctionService.handleBuyerForfeiture(id);
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<ListingResponse> updateListing(
             @PathVariable Long id,
             @Valid @RequestBody ListingRequest request
@@ -77,6 +85,7 @@ public class ListingController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Void> deleteListing(@PathVariable Long id) {
         auctionService.deleteListing(id);
         return ResponseEntity.noContent().build();
@@ -89,6 +98,7 @@ public class ListingController {
     }
 
     @PostMapping("/{id}/schedule")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<ListingResponse> scheduleAuction(
             @PathVariable Long id,
             @Valid @RequestBody AuctionScheduleRequest request

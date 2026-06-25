@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,6 +24,7 @@ public class BidController {
     private final AuctionService auctionService;
 
     @PostMapping
+    @PreAuthorize("hasAuthority('USER')")
     public ResponseEntity<BidResponse> placeBid(
             @PathVariable Long listingId,
             @Valid @RequestBody BidRequest request
@@ -34,6 +36,7 @@ public class BidController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Page<BidResponse>> getBids(
             @PathVariable Long listingId,
             @RequestParam(defaultValue = "0") int page,
@@ -50,6 +53,7 @@ public class BidController {
     }
 
     @GetMapping("/{bidId}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<BidResponse> getBid(
             @PathVariable Long listingId,
             @PathVariable Long bidId
@@ -59,6 +63,7 @@ public class BidController {
     }
 
     @DeleteMapping("/{bidId}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Void> deleteBid(
             @PathVariable Long listingId,
             @PathVariable Long bidId

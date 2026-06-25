@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class WalletController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('USER')")
     public ResponseEntity<WalletResponse> getWallet(@PathVariable Long userId) {
         log.debug("GET getWallet requested for userId: {}", userId);
         UserWallet wallet = walletService.getOrCreateWallet(userId);
@@ -55,6 +57,7 @@ public class WalletController {
     }
 
     @PostMapping("/deposit")
+    @PreAuthorize("hasAnyAuthority('USER')")
     public ResponseEntity<WalletResponse> depositFunds(
             @PathVariable Long userId,
             @Valid @RequestBody WalletDepositRequest request
@@ -71,6 +74,7 @@ public class WalletController {
     }
 
     @GetMapping("/transactions")
+    @PreAuthorize("hasAnyAuthority('USER')")
     public ResponseEntity<Page<WalletTransactionResponse>> getTransactions(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
@@ -87,6 +91,7 @@ public class WalletController {
     }
 
     @PutMapping
+    @PreAuthorize("hasAnyAuthority('USER')")
     public ResponseEntity<WalletResponse> updateWallet(
             @PathVariable Long userId,
             @RequestParam java.math.BigDecimal balance,
@@ -104,6 +109,7 @@ public class WalletController {
     }
 
     @DeleteMapping
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Void> deleteWallet(@PathVariable Long userId) {
         log.debug("DELETE deleteWallet requested for userId: {}", userId);
         walletService.deleteWallet(userId);
@@ -112,6 +118,7 @@ public class WalletController {
     }
 
     @GetMapping("/transactions/{transactionId}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<WalletTransactionResponse> getTransaction(
             @PathVariable Long userId,
             @PathVariable Long transactionId
