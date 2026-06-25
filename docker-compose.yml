@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  # --- Databases & Message Broker ---
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+    volumes:
+      - pg-auth-data:/var/lib/postgresql/data
+
+  postgres-auction:
+    image: postgres:16-alpine
+    container_name: postgres-auction
+    environment:
+      POSTGRES_DB: auction_db
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+    volumes:
+      - pg-auction-data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+
+  # --- Microservices (Built dynamically from repo by Railway) ---
+  discovery-service:
+    build:
+      context: ./discovery-service
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+
+  gateway-service:
+    build:
+      context: ./gateway-service
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka
+      - SPRING_CLOUD_GATEWAY_ROUTES_0_URI=http://auth-service:8081
+      - SPRING_CLOUD_GATEWAY_ROUTES_1_URI=http://auction-service:8082
+      - SPRING_CLOUD_GATEWAY_ROUTES_2_URI=ws://auction-service:8082
+    depends_on:
+      - discovery-service
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-auth:5432/auth_db
+      - SPRING_DATASOURCE_USERNAME=${DB_USER:-admin}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-password123}
+    depends_on:
+      - postgres-auth
+      - discovery-service
+
+  auction-service:
+    build:
+      context: ./auction-service
+    container_name: auction-service
+    ports:
+      - "8082:8082"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-auction:5432/auction_db
+      - SPRING_DATASOURCE_USERNAME=${DB_USER:-admin}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-password123}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-guest}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+    depends_on:
+      - postgres-auction
+      - rabbitmq
+      - discovery-service
+
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8083:8083"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka
+      - DB_LOCAL_URL=jdbc:postgresql://postgres-auth:5432/auth_db
+      - DB_LOCAL_USERNAME=${DB_USER:-admin}
+      - DB_LOCAL_PASSWORD=${DB_PASSWORD:-password123}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-guest}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - SPRING_MAIL_HOST=${SMTP_HOST:-maildev}
+      - SPRING_MAIL_PORT=${SMTP_PORT:-1025}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    ports:
+      - "3000:80"
+
+volumes:
+  pg-auth-data:
+  pg-auction-data:

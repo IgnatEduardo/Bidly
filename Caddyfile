@@ -1,0 +1,12 @@
+# Automatically provisions HTTPS SSL and routes requests
+{$DOMAIN} {
+    # Match API requests and route to Gateway
+    handle /api/* {
+        reverse_proxy gateway-service-prod:8080
+    }
+
+    # Match everything else and route to Frontend
+    handle {
+        reverse_proxy frontend-prod:80
+    }
+}
