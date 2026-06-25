@@ -309,7 +309,9 @@ class AuthControllerIntegrationTest {
         mockMvc.perform(delete("/api/v1/auth/users/{id}", user.getId()))
                 .andExpect(status().isNoContent());
 
-        assertFalse(userRepository.findById(user.getId()).isPresent());
+        var deletedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertFalse(deletedUser.isEnabled());
+        org.junit.jupiter.api.Assertions.assertEquals("deleted_user_" + user.getId(), deletedUser.getUsername());
     }
 }
 
