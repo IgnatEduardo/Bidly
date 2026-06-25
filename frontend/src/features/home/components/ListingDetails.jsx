@@ -33,7 +33,7 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
   // Connect to WebSocket via Gateway for real-time list refreshes
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8080/ws/auctions`;
+    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws/auctions`;
     
     console.log(`Connecting details to WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);

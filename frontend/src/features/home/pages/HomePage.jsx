@@ -116,7 +116,7 @@ const HomePage = ({ onLogout }) => {
   useEffect(() => {
     if (!userId) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8080/ws/auctions`;
+    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws/auctions`;
     
     console.log(`Connecting global homepage WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);
