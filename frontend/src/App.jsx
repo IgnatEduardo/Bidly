@@ -8,6 +8,7 @@ import ListingDetails from './features/home/components/ListingDetails';
 import CreateListing from './features/home/components/CreateListing';
 import MyListings from './features/home/components/MyListings';
 import WalletPage from './features/home/components/WalletPage';
+import ProfilePage from './features/home/components/ProfilePage';
 
 // Wrapper components to map route context / parameters to component props
 function DashboardWrapper() {
@@ -100,6 +101,7 @@ function App() {
           <Route path="my-listings" element={<MyListingsWrapper type="sales" />} />
           <Route path="my-bids" element={<MyListingsWrapper type="purchases" />} />
           <Route path="wallet" element={<WalletPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>

@@ -25,8 +25,8 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/api/v1/auctions/listings/**").permitAll()
-                        .requestMatchers("/ws/auctions/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auctions/listings/**", "/api/v1/auctions/sessions/**").permitAll()
+                        .requestMatchers("/ws/auctions", "/ws/auctions/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )

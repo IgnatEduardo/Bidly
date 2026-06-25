@@ -232,4 +232,40 @@ public class WalletService {
                             .build();
                 });
     }
+
+    @Transactional
+    public UserWallet updateWallet(Long userId, BigDecimal balance, BigDecimal lockedBalance) {
+        log.info("Updating wallet for user {} to balance={}, lockedBalance={}", userId, balance, lockedBalance);
+        UserWallet wallet = getOrCreateWalletWithLock(userId);
+        wallet.setBalance(balance);
+        wallet.setLockedBalance(lockedBalance);
+        return walletRepository.save(wallet);
+    }
+
+    @Transactional
+    public void deleteWallet(Long userId) {
+        log.info("Deleting wallet for user {}", userId);
+        UserWallet wallet = walletRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found for user: " + userId));
+        if (wallet.getBalance().compareTo(BigDecimal.ZERO) > 0 || wallet.getLockedBalance().compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException("Cannot delete wallet with non-zero balance or active locked funds.");
+        }
+        walletRepository.delete(wallet);
+    }
+
+    @Transactional(readOnly = true)
+    public WalletTransactionResponse getTransactionById(Long userId, Long transactionId) {
+        log.debug("Fetching transaction {} for user {}", transactionId, userId);
+        WalletTransaction t = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+        if (!t.getUserWallet().getUserId().equals(userId)) {
+            throw new IllegalArgumentException("Transaction does not belong to this user.");
+        }
+        return WalletTransactionResponse.builder()
+                .id(t.getId())
+                .amount(t.getAmount())
+                .type(t.getType())
+                .timestamp(t.getTimestamp())
+                .build();
+    }
 }
