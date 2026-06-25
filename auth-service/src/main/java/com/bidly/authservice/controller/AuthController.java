@@ -54,6 +54,13 @@ public class AuthController {
         return ResponseEntity.ok("Logout successful");
     }
 
+    @GetMapping("/users")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<java.util.List<UserResponse>> getAllUsers() {
+        return ResponseEntity.ok(authService
+                .getAllUsers());
+    }
+
     @GetMapping("/users/{id}")
     @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
@@ -70,7 +77,7 @@ public class AuthController {
     }
 
     @DeleteMapping("/users/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         authService.deleteUser(id);
         return ResponseEntity.noContent().build();

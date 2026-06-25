@@ -48,4 +48,23 @@ public class BidController {
         log.info("Fetched page {} of bids for listing {}, found {} elements", page, listingId, bids.getNumberOfElements());
         return ResponseEntity.ok(bids);
     }
+
+    @GetMapping("/{bidId}")
+    public ResponseEntity<BidResponse> getBid(
+            @PathVariable Long listingId,
+            @PathVariable Long bidId
+    ) {
+        log.debug("GET getBid requested for listingId: {}, bidId: {}", listingId, bidId);
+        return ResponseEntity.ok(auctionService.getBidById(listingId, bidId));
+    }
+
+    @DeleteMapping("/{bidId}")
+    public ResponseEntity<Void> deleteBid(
+            @PathVariable Long listingId,
+            @PathVariable Long bidId
+    ) {
+        log.debug("DELETE deleteBid requested for listingId: {}, bidId: {}", listingId, bidId);
+        auctionService.deleteBid(listingId, bidId);
+        return ResponseEntity.noContent().build();
+    }
 }

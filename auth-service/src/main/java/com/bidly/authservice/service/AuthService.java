@@ -170,6 +170,19 @@ public class AuthService {
         SecurityContextHolder.clearContext();
     }
 
+    public java.util.List<UserResponse> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(user -> UserResponse.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .enabled(user.isEnabled())
+                        .kycApproved(user.getKycApproved())
+                        .phoneNumber(user.getPhoneNumber())
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
@@ -179,6 +192,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .enabled(user.isEnabled())
                 .kycApproved(user.getKycApproved())
+                .phoneNumber(user.getPhoneNumber())
                 .build();
     }
 
@@ -194,6 +208,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .enabled(user.isEnabled())
                 .kycApproved(user.getKycApproved())
+                .phoneNumber(user.getPhoneNumber())
                 .build();
     }
 
@@ -240,6 +255,7 @@ public class AuthService {
                         .email(user.getEmail())
                         .enabled(user.isEnabled())
                         .kycApproved(user.getKycApproved())
+                        .phoneNumber(user.getPhoneNumber())
                         .build())
                 .accessToken(newAccessToken)
                 .build();
@@ -247,19 +263,36 @@ public class AuthService {
 
     @Transactional
     public void deleteUser(Long id) {
-        log.info("Deleting user with id={}", id);
+        log.info("Soft-deleting user with id={}", id);
 
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
 
-        refreshTokenService.deleteByUserId(id);
+        String currentUsername = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
+        boolean isAdmin = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
 
+        if (!isAdmin && !user.getUsername().equals(currentUsername)) {
+            throw new org.springframework.security.access.AccessDeniedException("You are not authorized to delete this user");
+        }
+
+        // Revoke active sessions/tokens
+        refreshTokenService.deleteByUserId(id);
         verificationTokenRepository.findByUser(user)
                 .ifPresent(verificationTokenRepository::delete);
 
-        userRepository.delete(user);
+        // Soft delete: disable and anonymize details
+        user.setEnabled(false);
+        user.setFirstName("Deleted");
+        user.setLastName("User");
+        user.setUsername("deleted_user_" + id);
+        user.setEmail("deleted_user_" + id + "@bidly.com");
+        user.setPhoneNumber("");
+        user.setPassword(""); // Scrub password hash
 
-        log.info("User with id={} and all associated tokens deleted successfully", id);
+        userRepository.save(user);
+
+        log.info("User with id={} soft-deleted successfully", id);
     }
 }
 

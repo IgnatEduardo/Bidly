@@ -10,4 +10,9 @@ scrape_configs:
   - job_name: 'auth-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:8081'] 
+      - targets: ['host.docker.internal:8081']
+
+  - job_name: 'auction-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: [ 'host.docker.internal:8082' ]

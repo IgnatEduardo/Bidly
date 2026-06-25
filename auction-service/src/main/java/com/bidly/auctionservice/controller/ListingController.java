@@ -66,4 +66,24 @@ public class ListingController {
         auctionService.handleBuyerForfeiture(id);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ListingResponse> updateListing(
+            @PathVariable Long id,
+            @Valid @RequestBody ListingRequest request
+    ) {
+        return ResponseEntity.ok(auctionService.updateListing(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteListing(@PathVariable Long id) {
+        auctionService.deleteListing(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/seller/{sellerId}")
+    public ResponseEntity<Void> deactivateListingsBySeller(@PathVariable Long sellerId) {
+        auctionService.deactivateListingsBySeller(sellerId);
+        return ResponseEntity.noContent().build();
+    }
 }

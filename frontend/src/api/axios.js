@@ -11,13 +11,9 @@ const API = axios.create({
 //Request interceptor to automatically attach the access token if it exists
 API.interceptors.request.use(
   (config) => {
-    const isAuthRoute = config.url && config.url.includes('/auth/');
-
-    if (!isAuthRoute) {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;

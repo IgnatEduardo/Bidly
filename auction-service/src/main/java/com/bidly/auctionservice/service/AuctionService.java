@@ -504,4 +504,251 @@ public class AuctionService {
                 .biddingSession(sessionResponse)
                 .build();
     }
+
+    @Transactional
+    public ListingResponse updateListing(Long id, ListingRequest request) {
+        log.info("Updating listing id={} with request: {}", id, request);
+        Listing listing = listingRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Listing not found with id: " + id));
+
+        // Enforce KYC check if category is changed to a high-value one
+        if (!listing.getCategory().equalsIgnoreCase(request.getCategory()) && isHighValueCategory(request.getCategory())) {
+            UserDto seller = userClient.getUserById(listing.getSellerId());
+            if (seller == null || !Boolean.TRUE.equals(seller.getKycApproved())) {
+                throw new IllegalArgumentException("Sellers must be KYC-Approved to list in high-value categories.");
+            }
+        }
+
+        BiddingSession session = listing.getBiddingSession();
+        boolean hasBids = session.getBids() != null && !session.getBids().isEmpty();
+
+        if (hasBids) {
+            // Do not allow updating key bidding parameters if bids have already been placed
+            if (request.getReservePrice().compareTo(session.getReservePrice()) != 0 ||
+                request.getBidIncrement().compareTo(session.getBidIncrement()) != 0 ||
+                !request.getStartTime().isEqual(session.getStartTime()) ||
+                !request.getEndTime().isEqual(session.getEndTime()) ||
+                (request.getBuyItNowPrice() != null && session.getBuyItNowPrice() != null && request.getBuyItNowPrice().compareTo(session.getBuyItNowPrice()) != 0) ||
+                (request.getBuyItNowPrice() == null && session.getBuyItNowPrice() != null) ||
+                (request.getBuyItNowPrice() != null && session.getBuyItNowPrice() == null)) {
+                throw new IllegalArgumentException("Cannot modify active bidding parameters (reserve price, increment, times) once bids have been placed.");
+            }
+        } else {
+            // Safe to update bidding parameters
+            LocalDateTime now = LocalDateTime.now();
+            if (request.getEndTime().isBefore(request.getStartTime())) {
+                throw new IllegalArgumentException("End time must be after the start time.");
+            }
+            if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
+                throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
+            }
+            session.setStartTime(request.getStartTime());
+            session.setEndTime(request.getEndTime());
+            session.setReservePrice(request.getReservePrice());
+            session.setBuyItNowPrice(request.getBuyItNowPrice());
+            session.setBidIncrement(request.getBidIncrement());
+            sessionRepository.save(session);
+        }
+
+        listing.setTitle(request.getTitle());
+        listing.setDescription(request.getDescription());
+        listing.setImageUrl(request.getImageUrl());
+        listing.setCategory(request.getCategory());
+        listingRepository.save(listing);
+
+        return mapToListingResponse(listing);
+    }
+
+    @Transactional
+    public void deleteListing(Long id) {
+        log.info("Deleting listing id={}", id);
+        Listing listing = listingRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Listing not found with id: " + id));
+
+        BiddingSession session = listing.getBiddingSession();
+        if (session != null && session.getBids() != null && !session.getBids().isEmpty()) {
+            throw new IllegalArgumentException("Cannot delete listing because bids have already been placed on it.");
+        }
+
+        listingRepository.delete(listing);
+        log.info("Successfully deleted listing id={}", id);
+    }
+
+    public BidResponse getBidById(Long listingId, Long bidId) {
+        Bid b = bidRepository.findById(bidId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bid not found with id: " + bidId));
+        if (!b.getBiddingSession().getListing().getId().equals(listingId)) {
+            throw new IllegalArgumentException("Bid does not belong to the specified listing.");
+        }
+        // fetch username
+        String username = "User " + b.getBidderId();
+        try {
+            UserDto bidder = userClient.getUserById(b.getBidderId());
+            if (bidder != null) {
+                username = bidder.getUsername();
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return BidResponse.builder()
+                .id(b.getId())
+                .biddingSessionId(b.getBiddingSession().getId())
+                .bidderId(b.getBidderId())
+                .bidderUsername(username)
+                .amount(b.getAmount())
+                .timestamp(b.getTimestamp())
+                .build();
+    }
+
+    @Transactional
+    public void deleteBid(Long listingId, Long bidId) {
+        log.info("Deleting bid {} for listing {}", bidId, listingId);
+        Bid bid = bidRepository.findById(bidId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bid not found with id: " + bidId));
+        BiddingSession session = bid.getBiddingSession();
+        if (!session.getListing().getId().equals(listingId)) {
+            throw new IllegalArgumentException("Bid does not belong to the specified listing.");
+        }
+
+        if (!Boolean.TRUE.equals(session.getActive())) {
+            throw new IllegalArgumentException("Cannot delete bids on a closed/ended auction session.");
+        }
+
+        List<Bid> bids = bidRepository.findByBiddingSessionIdOrderByAmountDesc(session.getId());
+        if (!bids.isEmpty() && bids.get(0).getId().equals(bidId)) {
+            // If we delete the highest bid, release its escrow
+            BigDecimal escrowToRelease = bid.getAmount().multiply(ESCROW_RATE);
+            walletService.releaseFunds(bid.getBidderId(), escrowToRelease);
+
+            // Re-lock the escrow for the next highest bidder if any exists
+            if (bids.size() > 1) {
+                Bid nextHighestBid = bids.get(1);
+                BigDecimal newEscrow = nextHighestBid.getAmount().multiply(ESCROW_RATE);
+                walletService.lockFunds(nextHighestBid.getBidderId(), newEscrow);
+                log.info("Transferred highest bidder status to next highest bidder: {}", nextHighestBid.getBidderId());
+            }
+        }
+
+        bidRepository.delete(bid);
+        log.info("Deleted bid {} successfully", bidId);
+    }
+
+    public BiddingSessionResponse getSessionById(Long id) {
+        BiddingSession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Bidding session not found with id: " + id));
+        
+        BigDecimal highestBid = session.getBids() == null || session.getBids().isEmpty()
+                ? null
+                : session.getBids().stream()
+                        .map(Bid::getAmount)
+                        .max(BigDecimal::compareTo)
+                        .orElse(null);
+
+        Long highestBidderId = null;
+        if (highestBid != null) {
+            highestBidderId = session.getBids().stream()
+                    .filter(b -> b.getAmount().compareTo(highestBid) == 0)
+                    .map(Bid::getBidderId)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        List<BidResponse> bidResponses = session.getBids() == null ? List.of() : session.getBids().stream().map(b -> {
+            String username = "User " + b.getBidderId();
+            try {
+                UserDto bidder = userClient.getUserById(b.getBidderId());
+                if (bidder != null) {
+                    username = bidder.getUsername();
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+            return BidResponse.builder()
+                    .id(b.getId())
+                    .biddingSessionId(session.getId())
+                    .bidderId(b.getBidderId())
+                    .bidderUsername(username)
+                    .amount(b.getAmount())
+                    .timestamp(b.getTimestamp())
+                    .build();
+        }).toList();
+
+        return BiddingSessionResponse.builder()
+                .id(session.getId())
+                .startTime(session.getStartTime())
+                .endTime(session.getEndTime())
+                .reservePrice(session.getReservePrice())
+                .buyItNowPrice(session.getBuyItNowPrice())
+                .bidIncrement(session.getBidIncrement())
+                .active(session.getActive())
+                .currentHighestBid(highestBid)
+                .currentHighestBidderId(highestBidderId)
+                .bids(bidResponses)
+                .build();
+    }
+
+    @Transactional
+    public BiddingSessionResponse updateSession(Long id, BiddingSessionRequest request) {
+        log.info("Updating bidding session id={}", id);
+        BiddingSession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Bidding session not found with id: " + id));
+
+        boolean hasBids = session.getBids() != null && !session.getBids().isEmpty();
+        if (hasBids) {
+            if (request.getReservePrice().compareTo(session.getReservePrice()) != 0 ||
+                request.getBidIncrement().compareTo(session.getBidIncrement()) != 0 ||
+                !request.getStartTime().isEqual(session.getStartTime()) ||
+                !request.getEndTime().isEqual(session.getEndTime()) ||
+                (request.getBuyItNowPrice() != null && session.getBuyItNowPrice() != null && request.getBuyItNowPrice().compareTo(session.getBuyItNowPrice()) != 0) ||
+                (request.getBuyItNowPrice() == null && session.getBuyItNowPrice() != null) ||
+                (request.getBuyItNowPrice() != null && session.getBuyItNowPrice() == null)) {
+                throw new IllegalArgumentException("Cannot modify active bidding parameters once bids have been placed.");
+            }
+        } else {
+            LocalDateTime now = LocalDateTime.now();
+            if (request.getEndTime().isBefore(request.getStartTime())) {
+                throw new IllegalArgumentException("End time must be after the start time.");
+            }
+            if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
+                throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
+            }
+            session.setStartTime(request.getStartTime());
+            session.setEndTime(request.getEndTime());
+            session.setReservePrice(request.getReservePrice());
+            session.setBuyItNowPrice(request.getBuyItNowPrice());
+            session.setBidIncrement(request.getBidIncrement());
+            sessionRepository.save(session);
+        }
+        return getSessionById(id);
+    }
+
+    @Transactional
+    public void deleteSession(Long id) {
+        log.info("Deleting bidding session id={}", id);
+        BiddingSession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Bidding session not found with id: " + id));
+        if (session.getBids() != null && !session.getBids().isEmpty()) {
+            throw new IllegalArgumentException("Cannot delete bidding session because bids have already been placed on it.");
+        }
+        sessionRepository.delete(session);
+    }
+
+    @Transactional
+    public void deactivateListingsBySeller(Long sellerId) {
+        log.info("Deactivating or deleting listings for sellerId={}", sellerId);
+        List<Listing> listings = listingRepository.findBySellerId(sellerId);
+        for (Listing listing : listings) {
+            BiddingSession session = listing.getBiddingSession();
+            if (session != null) {
+                if (session.getBids() == null || session.getBids().isEmpty()) {
+                    listingRepository.delete(listing);
+                } else {
+                    session.setActive(false);
+                    sessionRepository.save(session);
+                }
+            } else {
+                listingRepository.delete(listing);
+            }
+        }
+    }
 }
