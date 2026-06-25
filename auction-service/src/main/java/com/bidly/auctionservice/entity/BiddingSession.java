@@ -25,12 +25,10 @@ public class BiddingSession {
     @JoinColumn(name = "listing_id", nullable = false)
     private Listing listing;
 
-    @NotNull(message = "Start time is required")
-    @Column(name = "start_time", nullable = false)
+    @Column(name = "start_time")
     private LocalDateTime startTime;
 
-    @NotNull(message = "End time is required")
-    @Column(name = "end_time", nullable = false)
+    @Column(name = "end_time")
     private LocalDateTime endTime;
 
     @NotNull(message = "Reserve price is required")

@@ -16,11 +16,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -85,7 +87,6 @@ class AuthControllerIntegrationTest {
 
     @Test
     void testRegisterEndpoint_DuplicateEmail_Conflict() throws Exception {
-        // First registration
         RegisterRequest req1 = new RegisterRequest();
         req1.setFirstName("First");
         req1.setLastName("User");
@@ -117,7 +118,6 @@ class AuthControllerIntegrationTest {
 
     @Test
     void testLoginEndpoint_Success() throws Exception {
-        // Setup: Register and confirm
         RegisterRequest regReq = new RegisterRequest();
         regReq.setFirstName("Login");
         regReq.setLastName("User");
@@ -155,7 +155,6 @@ class AuthControllerIntegrationTest {
 
     @Test
     void testConfirmEndpoint_WithValidToken() throws Exception {
-        // Register first
         RegisterRequest regReq = new RegisterRequest();
         regReq.setFirstName("Confirm");
         regReq.setLastName("Test");
@@ -179,8 +178,8 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    @WithMockUser(authorities = "USER")
     void testGetUserEndpoint() throws Exception {
-        // Register user
         RegisterRequest regReq = new RegisterRequest();
         regReq.setFirstName("Get");
         regReq.setLastName("User");
@@ -204,7 +203,6 @@ class AuthControllerIntegrationTest {
 
     @Test
     void testToggleKycEndpoint() throws Exception {
-        // Register user
         RegisterRequest regReq = new RegisterRequest();
         regReq.setFirstName("KYC");
         regReq.setLastName("Test");
@@ -228,7 +226,6 @@ class AuthControllerIntegrationTest {
 
     @Test
     void testLoginEndpoint_WithWrongPassword() throws Exception {
-        // Setup: Register
         RegisterRequest regReq = new RegisterRequest();
         regReq.setFirstName("Wrong");
         regReq.setLastName("Pass");
@@ -257,6 +254,64 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginReq)))
                 .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @WithMockUser(authorities = "USER")
+    void testUpdateUserEndpoint() throws Exception {
+        RegisterRequest regReq = new RegisterRequest();
+        regReq.setFirstName("Update");
+        regReq.setLastName("User");
+        regReq.setUsername("updateuser");
+        regReq.setEmail("update@example.com");
+        regReq.setPassword("Pass123!");
+        regReq.setPhoneNumber("0712345678");
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(regReq)))
+                .andExpect(status().isCreated());
+
+        var user = userRepository.findByUsername("updateuser").orElseThrow();
+
+        UpdateUserRequest request = new UpdateUserRequest();
+        request.setUsername("updateduser");
+        request.setEmail("updated@example.com");
+        request.setPhoneNumber("0799999999");
+
+        mockMvc.perform(put("/api/v1/auth/users/{id}", user.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.username").value("updateduser"))
+                .andExpect(jsonPath("$.user.email").value("updated@example.com"))
+                .andExpect(jsonPath("$.accessToken").exists());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ADMIN")
+    void testDeleteUserEndpoint() throws Exception {
+        RegisterRequest regReq = new RegisterRequest();
+        regReq.setFirstName("Delete");
+        regReq.setLastName("User");
+        regReq.setUsername("deleteuser");
+        regReq.setEmail("delete@example.com");
+        regReq.setPassword("Pass123!");
+        regReq.setPhoneNumber("0712345678");
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(regReq)))
+                .andExpect(status().isCreated());
+
+        var user = userRepository.findByUsername("deleteuser").orElseThrow();
+
+        mockMvc.perform(delete("/api/v1/auth/users/{id}", user.getId()))
+                .andExpect(status().isNoContent());
+
+        var deletedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertFalse(deletedUser.isEnabled());
+        org.junit.jupiter.api.Assertions.assertEquals("deleted_user_" + user.getId(), deletedUser.getUsername());
     }
 }
 

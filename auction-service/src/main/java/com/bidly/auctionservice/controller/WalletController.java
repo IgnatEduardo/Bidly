@@ -85,4 +85,38 @@ public class WalletController {
         log.info("Fetched page {} of transactions for user {}, found {} elements", page, userId, transactions.getNumberOfElements());
         return ResponseEntity.ok(transactions);
     }
+
+    @PutMapping
+    public ResponseEntity<WalletResponse> updateWallet(
+            @PathVariable Long userId,
+            @RequestParam java.math.BigDecimal balance,
+            @RequestParam java.math.BigDecimal lockedBalance
+    ) {
+        log.debug("PUT updateWallet requested for userId: {}, balance: {}, lockedBalance: {}", userId, balance, lockedBalance);
+        UserWallet wallet = walletService.updateWallet(userId, balance, lockedBalance);
+        log.info("Successfully updated wallet for user {} to balance={}, lockedBalance={}", userId, balance, lockedBalance);
+        return ResponseEntity.ok(WalletResponse.builder()
+                .userId(wallet.getUserId())
+                .balance(wallet.getBalance())
+                .lockedBalance(wallet.getLockedBalance())
+                .transactions(mapTransactions(wallet))
+                .build());
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deleteWallet(@PathVariable Long userId) {
+        log.debug("DELETE deleteWallet requested for userId: {}", userId);
+        walletService.deleteWallet(userId);
+        log.info("Successfully deleted wallet for user {}", userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/transactions/{transactionId}")
+    public ResponseEntity<WalletTransactionResponse> getTransaction(
+            @PathVariable Long userId,
+            @PathVariable Long transactionId
+    ) {
+        log.debug("GET getTransaction requested for userId: {}, transactionId: {}", userId, transactionId);
+        return ResponseEntity.ok(walletService.getTransactionById(userId, transactionId));
+    }
 }

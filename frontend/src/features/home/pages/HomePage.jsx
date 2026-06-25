@@ -3,7 +3,7 @@ import API from '../../../api/axios';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
 const HomePage = ({ onLogout }) => {
-  const username = localStorage.getItem('username') || 'User';
+  const [currentUsername, setCurrentUsername] = useState(() => localStorage.getItem('username') || 'User');
   const userId = localStorage.getItem('userId');
   
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ const HomePage = ({ onLogout }) => {
     if (path.startsWith('/my-listings')) return 'listings';
     if (path.startsWith('/my-bids')) return 'bids';
     if (path.startsWith('/wallet')) return 'wallet';
+    if (path.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };
   const activeTab = getActiveTab();
@@ -98,10 +99,15 @@ const HomePage = ({ onLogout }) => {
     fetchWalletBalance();
   }, [userId]);
 
-  // Handle local trigger to refresh wallet balance when subcomponents complete transactions
+  // Handle local triggers to refresh profile username and wallet balance when updated
   useEffect(() => {
+    const handleUsernameUpdate = (e) => {
+      setCurrentUsername(e.detail);
+    };
+    window.addEventListener('username-updated', handleUsernameUpdate);
     window.addEventListener('wallet-updated', fetchWalletBalance);
     return () => {
+      window.removeEventListener('username-updated', handleUsernameUpdate);
       window.removeEventListener('wallet-updated', fetchWalletBalance);
     };
   }, []);
@@ -110,7 +116,7 @@ const HomePage = ({ onLogout }) => {
   useEffect(() => {
     if (!userId) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8080/ws/auctions`;
+    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws/auctions`;
     
     console.log(`Connecting global homepage WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);
@@ -149,6 +155,7 @@ const HomePage = ({ onLogout }) => {
     else if (tab === 'listings') navigate('/my-listings');
     else if (tab === 'bids') navigate('/my-bids');
     else if (tab === 'wallet') navigate('/wallet');
+    else if (tab === 'profile') navigate('/profile');
     // Refresh balance on tab switch to be safe
     fetchWalletBalance();
   };
@@ -218,7 +225,13 @@ const HomePage = ({ onLogout }) => {
             </button>
           </div>
           
-          <span className="user-name">Welcome, <strong>{username}</strong></span>
+          <span className="user-name">Welcome, <strong>{currentUsername}</strong></span>
+          <button 
+            className={`settings-btn ${activeTab === 'profile' ? 'active' : ''}`} 
+            onClick={() => navigateTo('profile')}
+          >
+            ⚙ Settings
+          </button>
           <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </nav>
@@ -283,6 +296,7 @@ const HomePage = ({ onLogout }) => {
           <span className="notification-bell-badge">{unreadNotificationsCount}</span>
         )}
       </button>
+
     </div>
   );
 };

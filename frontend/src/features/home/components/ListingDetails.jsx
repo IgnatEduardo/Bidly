@@ -10,14 +10,41 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
   const [bidError, setBidError] = useState('');
   const [bidSuccess, setBidSuccess] = useState('');
 
+  // Scheduling states
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleStartTime, setScheduleStartTime] = useState('');
+  const [scheduleEndTime, setScheduleEndTime] = useState('');
+  const [scheduleBuyItNowPrice, setScheduleBuyItNowPrice] = useState('');
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleSuccess, setScheduleSuccess] = useState('');
+
   const wsRef = useRef(null);
   const userId = Number(localStorage.getItem('userId'));
+
+  const getNowString = () => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+
+  const getSixMonthsLaterString = (baseDateStr) => {
+    if (!baseDateStr) return '';
+    const date = new Date(baseDateStr);
+    date.setMonth(date.getMonth() + 6);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
 
   // Fetch listing
   const fetchListingDetails = async () => {
     try {
       const response = await API.get(`/auctions/listings/${listingId}`);
-      setListing(response.data);
+      const data = response.data;
+      setListing(data);
+      if (data.biddingSession) {
+        setScheduleStartTime(data.biddingSession.startTime ? data.biddingSession.startTime.slice(0, 16) : '');
+        setScheduleEndTime(data.biddingSession.endTime ? data.biddingSession.endTime.slice(0, 16) : '');
+        setScheduleBuyItNowPrice(data.biddingSession.buyItNowPrice || '');
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to fetch details for this listing.');
@@ -33,7 +60,7 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
   // Connect to WebSocket via Gateway for real-time list refreshes
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8080/ws/auctions`;
+    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws/auctions`;
     
     console.log(`Connecting details to WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);
@@ -156,6 +183,60 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
     }
   };
 
+  const handleSchedule = async (e) => {
+    e.preventDefault();
+    setScheduleError('');
+    setScheduleSuccess('');
+
+    if (!scheduleStartTime || !scheduleEndTime) {
+      setScheduleError('Please fill in all scheduling fields.');
+      return;
+    }
+
+    const now = new Date();
+    const minStart = new Date(now.getTime() - 60000); // 1-minute grace buffer
+    if (new Date(scheduleStartTime) < minStart) {
+      setScheduleError('Start Time must be starting now or in the future.');
+      return;
+    }
+    if (new Date(scheduleEndTime) <= new Date(scheduleStartTime)) {
+      setScheduleError('End Time must be after Start Time.');
+      return;
+    }
+    const maxEnd = new Date(scheduleStartTime);
+    maxEnd.setMonth(maxEnd.getMonth() + 6);
+    if (new Date(scheduleEndTime) > maxEnd) {
+      setScheduleError('End Time must be at most 6 months from the Start Time.');
+      return;
+    }
+    
+    const reservePriceVal = listing?.biddingSession?.reservePrice || 0;
+    if (scheduleBuyItNowPrice && parseFloat(scheduleBuyItNowPrice) <= parseFloat(reservePriceVal)) {
+      setScheduleError('Buy It Now Price must be greater than Reserve Price.');
+      return;
+    }
+
+    setScheduleLoading(true);
+    try {
+      const payload = {
+        startTime: scheduleStartTime,
+        endTime: scheduleEndTime,
+        buyItNowPrice: scheduleBuyItNowPrice ? parseFloat(scheduleBuyItNowPrice) : null
+      };
+
+      const response = await API.post(`/auctions/listings/${listingId}/schedule`, payload);
+      setListing(response.data);
+      setScheduleSuccess('Auction scheduled successfully!');
+      if (addToast) addToast('📅 Auction schedule updated!', 'success');
+      setShowScheduleForm(false);
+    } catch (err) {
+      console.error(err);
+      setScheduleError(err.response?.data?.message || 'Failed to update auction schedule.');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   const isHighValue = (cat) => {
     if (!cat) return false;
     const lower = cat.toLowerCase();
@@ -181,15 +262,18 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
   }
 
   const session = listing.biddingSession || {};
+  const isScheduled = !!(session.startTime && session.endTime);
   const currentBid = session.currentHighestBid || session.reservePrice || 0;
   const minRequiredBid = session.currentHighestBid 
-    ? currentBid + session.bidIncrement 
-    : session.reservePrice;
+    ? currentBid + (session.bidIncrement || 0)
+    : (session.reservePrice || 0);
   const isSeller = Number(listing.sellerId) === userId;
   
   // Status check for alerts
   const isHighestBidder = session.currentHighestBidderId !== null && Number(session.currentHighestBidderId) === userId;
   const hasPlacedBid = session.bids && session.bids.some(b => Number(b.bidderId) === userId);
+  const hasBids = session.bids && session.bids.length > 0;
+  const canSchedule = isSeller && (!isScheduled || !hasBids);
 
   return (
     <div className="details-page-container">
@@ -249,28 +333,43 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
         {/* Right Side: Bidding Panel */}
         <div className="details-right">
           <div className="bidding-panel">
-            <Countdown endTime={session.endTime} isActive={session.active} />
-
-            <div className="prices-summary">
-              <div className="price-box">
-                <span className="price-label">{session.currentHighestBid ? 'Highest Bid' : 'Starting Price'}</span>
-                <span className="price-amount">${currentBid.toLocaleString()}</span>
+            {isScheduled ? (
+              <Countdown endTime={session.endTime} isActive={session.active} />
+            ) : (
+              <div className="details-timer expired">
+                <span className="timer-label">Auction Status:</span>
+                <span className="timer-value">Not Scheduled</span>
               </div>
-              {session.buyItNowPrice && (
-                <div className="price-box">
-                  <span className="price-label">Buy It Now Price</span>
-                  <span className="price-amount bin-color">${session.buyItNowPrice.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
+            )}
 
-            <div className="bid-increments-info">
-              <span>Min Required Bid: <strong>${minRequiredBid.toLocaleString()}</strong></span>
-              <span>Increment: <strong>${session.bidIncrement.toLocaleString()}</strong></span>
-            </div>
+            {session.reservePrice != null ? (
+              <>
+                <div className="prices-summary">
+                  <div className="price-box">
+                    <span className="price-label">{session.currentHighestBid ? 'Highest Bid' : 'Starting Price'}</span>
+                    <span className="price-amount">${currentBid.toLocaleString()}</span>
+                  </div>
+                  {session.buyItNowPrice && (
+                    <div className="price-box">
+                      <span className="price-label">Buy It Now Price</span>
+                      <span className="price-amount bin-color">${session.buyItNowPrice.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bid-increments-info">
+                  <span>Min Required Bid: <strong>${minRequiredBid.toLocaleString()}</strong></span>
+                  <span>Increment: <strong>${(session.bidIncrement || 0).toLocaleString()}</strong></span>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '16px 0', color: '#8b949e', borderBottom: '1px solid #21262d', marginBottom: '20px' }}>
+                No pricing or bidding increments set yet.
+              </div>
+            )}
 
             {/* Bidding alerts (Are you winning / outbid) */}
-            {session.active && !isSeller && (
+            {isScheduled && session.active && !isSeller && (
               <div className="bidding-alert-box">
                 {isHighestBidder && (
                   <div className="alert alert-success text-center">🥇 You are currently the highest bidder!</div>
@@ -281,66 +380,142 @@ const ListingDetails = ({ listingId, onBack, addToast }) => {
               </div>
             )}
 
-            {/* Bidding Action Form */}
-            {session.active ? (
-              isSeller ? (
-                <div className="seller-notice">
-                  You are the owner of this auction. Sellers cannot bid on their own listings.
-                </div>
-              ) : (
-                <form onSubmit={handlePlaceBid} className="bid-form">
-                  <h3>Place Your Bid</h3>
+            {/* Action panel (Form/Notice depending on scheduler vs. bidder role) */}
+            {canSchedule ? (
+              showScheduleForm ? (
+                <form onSubmit={handleSchedule} className="bid-form">
+                  <h3>📅 Schedule Auction</h3>
                   
-                  {bidError && <div className="alert alert-danger">{bidError}</div>}
-                  {bidSuccess && <div className="alert alert-success">{bidSuccess}</div>}
+                  {scheduleError && <div className="alert alert-danger">{scheduleError}</div>}
+                  {scheduleSuccess && <div className="alert alert-success">{scheduleSuccess}</div>}
 
                   <div className="input-group">
-                    <label>Bid Amount ($)</label>
-                    <div className="bid-input-wrapper">
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="input-field bid-input"
-                        placeholder={`Min $${minRequiredBid}`}
-                        value={bidAmount}
-                        onChange={(e) => setBidAmount(e.target.value)}
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="increment-bid-btn"
-                        onClick={() => {
-                          const currentVal = parseFloat(bidAmount) || minRequiredBid;
-                          setBidAmount((currentVal + session.bidIncrement));
-                        }}
-                        title={`Increase by $${session.bidIncrement}`}
-                      >
-                        +
-                      </button>
-                    </div>
+                    <label>Buy It Now Price ($) (Optional)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input-field"
+                      placeholder="Ends auction instantly if met"
+                      value={scheduleBuyItNowPrice}
+                      onChange={(e) => setScheduleBuyItNowPrice(e.target.value)}
+                      disabled={scheduleLoading}
+                    />
                   </div>
 
-                  <div className="escrow-disclaimer">
-                    ⚠️ Placed bids lock an <strong>escrow deposit of 10%</strong> (${(parseFloat(bidAmount || 0) * 0.10).toFixed(2)}) from your wallet. If you are outbid, the escrow is immediately released back to you.
+                  <div className="input-group">
+                    <label>Start Time</label>
+                    <input
+                      type="datetime-local"
+                      className="input-field"
+                      value={scheduleStartTime}
+                      min={getNowString()}
+                      onChange={(e) => setScheduleStartTime(e.target.value)}
+                      required
+                      disabled={scheduleLoading}
+                    />
                   </div>
 
-                  <button type="submit" className="place-bid-btn" disabled={bidLoading || isHighestBidder}>
-                    {bidLoading ? 'Submitting Bid...' : isHighestBidder ? 'You are Leading' : 'Place Official Bid'}
-                  </button>
+                  <div className="input-group">
+                    <label>End Time</label>
+                    <input
+                      type="datetime-local"
+                      className="input-field"
+                      value={scheduleEndTime}
+                      min={scheduleStartTime}
+                      max={getSixMonthsLaterString(scheduleStartTime)}
+                      onChange={(e) => setScheduleEndTime(e.target.value)}
+                      required
+                      disabled={scheduleLoading}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                    <button type="submit" className="place-bid-btn" style={{ flex: 1 }} disabled={scheduleLoading}>
+                      {scheduleLoading ? 'Saving...' : 'Save Schedule'}
+                    </button>
+                    <button type="button" className="cancel-btn" style={{ flex: 1, padding: '12px' }} onClick={() => setShowScheduleForm(false)} disabled={scheduleLoading}>
+                      Cancel
+                    </button>
+                  </div>
                 </form>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  <p style={{ color: '#8b949e', fontSize: '0.9rem', marginBottom: '16px' }}>
+                    {isScheduled 
+                      ? 'No bids have been placed on this listing yet. You can update the timing parameters.'
+                      : 'This listing is currently unscheduled. Set up your start and end times to open bidding.'}
+                  </p>
+                  <button className="place-bid-btn" onClick={() => setShowScheduleForm(true)}>
+                    📅 {isScheduled ? 'Reschedule Auction' : 'Schedule Auction'}
+                  </button>
+                </div>
               )
             ) : (
-              <div className="ended-notice">
-                This bidding session has closed.
-                {session.currentHighestBid ? (
-                  <p>Winner: <strong>{session.currentHighestBidderId === userId ? "You" : `User ${session.currentHighestBidderId}`}</strong></p>
-                ) : null}
-                {session.currentHighestBid ? (
-                  <p>Highest final bid was <strong>${session.currentHighestBid.toLocaleString()}</strong>.</p>
+              // Bidding panel / Buyer Notice
+              !isScheduled ? (
+                <div className="seller-notice" style={{ textAlign: 'center' }}>
+                  This listing is not currently scheduled for an active auction. Check back later!
+                </div>
+              ) : session.active ? (
+                isSeller ? (
+                  <div className="seller-notice">
+                    You are the owner of this auction. Sellers cannot bid on their own listings.
+                  </div>
                 ) : (
-                  <p>No bids were received for this listing.</p>
-                )}
-              </div>
+                  <form onSubmit={handlePlaceBid} className="bid-form">
+                    <h3>Place Your Bid</h3>
+                    
+                    {bidError && <div className="alert alert-danger">{bidError}</div>}
+                    {bidSuccess && <div className="alert alert-success">{bidSuccess}</div>}
+
+                    <div className="input-group">
+                      <label>Bid Amount ($)</label>
+                      <div className="bid-input-wrapper">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="input-field bid-input"
+                          placeholder={`Min $${minRequiredBid}`}
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="increment-bid-btn"
+                          onClick={() => {
+                            const currentVal = parseFloat(bidAmount) || minRequiredBid;
+                            setBidAmount((currentVal + session.bidIncrement));
+                          }}
+                          title={`Increase by $${session.bidIncrement}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="escrow-disclaimer">
+                      ⚠️ Placed bids lock an <strong>escrow deposit of 10%</strong> (${(parseFloat(bidAmount || 0) * 0.10).toFixed(2)}) from your wallet. If you are outbid, the escrow is immediately released back to you.
+                    </div>
+
+                    <button type="submit" className="place-bid-btn" disabled={bidLoading || isHighestBidder}>
+                      {bidLoading ? 'Submitting Bid...' : isHighestBidder ? 'You are Leading' : 'Place Official Bid'}
+                    </button>
+                  </form>
+                )
+              ) : (
+                <div className="ended-notice">
+                  This bidding session has closed.
+                  {session.currentHighestBid ? (
+                    <p>Winner: <strong>{session.currentHighestBidderId === userId ? "You" : `User ${session.currentHighestBidderId}`}</strong></p>
+                  ) : null}
+                  {session.currentHighestBid ? (
+                    <p>Highest final bid was <strong>${session.currentHighestBid.toLocaleString()}</strong>.</p>
+                  ) : (
+                    <p>No bids were received for this listing.</p>
+                  )}
+                </div>
+              )
             )}
           </div>
         </div>

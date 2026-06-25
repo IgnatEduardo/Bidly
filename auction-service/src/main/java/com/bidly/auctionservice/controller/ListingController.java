@@ -2,6 +2,7 @@ package com.bidly.auctionservice.controller;
 
 import com.bidly.auctionservice.dto.ListingRequest;
 import com.bidly.auctionservice.dto.ListingResponse;
+import com.bidly.auctionservice.dto.AuctionScheduleRequest;
 import com.bidly.auctionservice.service.AuctionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -65,5 +66,33 @@ public class ListingController {
     public ResponseEntity<Void> handleForfeiture(@PathVariable Long id) {
         auctionService.handleBuyerForfeiture(id);
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ListingResponse> updateListing(
+            @PathVariable Long id,
+            @Valid @RequestBody ListingRequest request
+    ) {
+        return ResponseEntity.ok(auctionService.updateListing(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteListing(@PathVariable Long id) {
+        auctionService.deleteListing(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/seller/{sellerId}")
+    public ResponseEntity<Void> deactivateListingsBySeller(@PathVariable Long sellerId) {
+        auctionService.deactivateListingsBySeller(sellerId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/schedule")
+    public ResponseEntity<ListingResponse> scheduleAuction(
+            @PathVariable Long id,
+            @Valid @RequestBody AuctionScheduleRequest request
+    ) {
+        return ResponseEntity.ok(auctionService.scheduleAuction(id, request));
     }
 }

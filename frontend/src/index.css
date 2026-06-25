@@ -1749,3 +1749,117 @@ body {
   font-size: 0.7rem;
   color: var(--text-muted, #8b949e);
 }
+
+/* Settings Button & Profile Modal */
+.settings-btn {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.settings-btn:hover {
+  background-color: rgba(79, 70, 229, 0.1);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(13, 17, 23, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1500;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 450px;
+  padding: 24px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  color: #c9d1d9;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #21262d;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #ffffff;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #8b949e;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close-btn:hover {
+  color: #ffffff;
+}
+
+.danger-zone-box {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px dashed #da3637;
+  border-radius: 8px;
+  background-color: rgba(218, 54, 55, 0.05);
+}
+
+.danger-zone-box h4 {
+  margin: 0 0 8px 0;
+  color: #f85149;
+  font-size: 0.95rem;
+}
+
+.danger-zone-box p {
+  font-size: 0.8rem;
+  color: #8b949e;
+  margin: 0 0 12px 0;
+}
+
+.delete-account-btn {
+  background-color: #da3637;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.2s;
+}
+
+.delete-account-btn:hover {
+  background-color: #b82d2e;
+}

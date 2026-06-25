@@ -15,4 +15,5 @@ public class UserResponse {
     private String email;
     private Boolean enabled;
     private Boolean kycApproved;
+    private String phoneNumber;
 }

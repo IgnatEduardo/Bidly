@@ -1,13 +1,8 @@
 package com.bidly.auctionservice.dto;
 
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Future;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,24 +11,12 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ListingRequest {
+public class BiddingSessionRequest {
 
-    @NotBlank(message = "Title is required")
-    private String title;
-
-    @NotBlank(message = "Description is required")
-    private String description;
-
-    private String imageUrl;
-
-    @NotBlank(message = "Category is required")
-    private String category;
-
-    @NotNull(message = "Seller ID is required")
-    private Long sellerId;
-
+    @NotNull(message = "Start time is required")
     private LocalDateTime startTime;
 
+    @NotNull(message = "End time is required")
     private LocalDateTime endTime;
 
     @NotNull(message = "Reserve price is required")

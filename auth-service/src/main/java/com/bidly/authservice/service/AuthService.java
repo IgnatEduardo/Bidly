@@ -170,6 +170,19 @@ public class AuthService {
         SecurityContextHolder.clearContext();
     }
 
+    public java.util.List<UserResponse> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(user -> UserResponse.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .enabled(user.isEnabled())
+                        .kycApproved(user.getKycApproved())
+                        .phoneNumber(user.getPhoneNumber())
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
@@ -179,6 +192,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .enabled(user.isEnabled())
                 .kycApproved(user.getKycApproved())
+                .phoneNumber(user.getPhoneNumber())
                 .build();
     }
 
@@ -194,7 +208,91 @@ public class AuthService {
                 .email(user.getEmail())
                 .enabled(user.isEnabled())
                 .kycApproved(user.getKycApproved())
+                .phoneNumber(user.getPhoneNumber())
                 .build();
+    }
+
+    @Transactional
+    public UpdateUserResponse updateUser(Long id, UpdateUserRequest request) {
+        log.info("Updating specific fields for user with id={}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+
+        if (request.getUsername() != null && !request.getUsername().trim().isEmpty()) {
+            if (!request.getUsername().equals(user.getUsername())) {
+                if (userRepository.existsByUsername(request.getUsername())) {
+                    throw new UsernameAlreadyExistsException("Username already exists");
+                }
+                user.setUsername(request.getUsername());
+                log.info("User id={} changed username to: {}", id, request.getUsername());
+            }
+        }
+
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            if (!request.getEmail().equals(user.getEmail())) {
+                if (userRepository.existsByEmail(request.getEmail())) {
+                    throw new EmailAlreadyExistsException("Email already exists");
+                }
+                user.setEmail(request.getEmail());
+                log.info("User id={} changed email to: {}", id, request.getEmail());
+            }
+        }
+
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().trim().isEmpty()) {
+            user.setPhoneNumber(request.getPhoneNumber());
+            log.info("User id={} changed phone number to: {}", id, request.getPhoneNumber());
+        }
+
+        user = userRepository.save(user);
+
+        String newAccessToken = jwtService.generateToken(user);
+
+        return UpdateUserResponse.builder()
+                .user(UserResponse.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .enabled(user.isEnabled())
+                        .kycApproved(user.getKycApproved())
+                        .phoneNumber(user.getPhoneNumber())
+                        .build())
+                .accessToken(newAccessToken)
+                .build();
+    }
+
+    @Transactional
+    public void deleteUser(Long id) {
+        log.info("Soft-deleting user with id={}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+
+        String currentUsername = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
+        boolean isAdmin = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
+
+        if (!isAdmin && !user.getUsername().equals(currentUsername)) {
+            throw new org.springframework.security.access.AccessDeniedException("You are not authorized to delete this user");
+        }
+
+        // Revoke active sessions/tokens
+        refreshTokenService.deleteByUserId(id);
+        verificationTokenRepository.findByUser(user)
+                .ifPresent(verificationTokenRepository::delete);
+
+        // Soft delete: disable and anonymize details
+        user.setEnabled(false);
+        user.setFirstName("Deleted");
+        user.setLastName("User");
+        user.setUsername("deleted_user_" + id);
+        user.setEmail("deleted_user_" + id + "@bidly.com");
+        user.setPhoneNumber("");
+        user.setPassword(""); // Scrub password hash
+
+        userRepository.save(user);
+
+        log.info("User with id={} soft-deleted successfully", id);
     }
 }
 
