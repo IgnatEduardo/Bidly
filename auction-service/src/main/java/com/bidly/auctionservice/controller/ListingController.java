@@ -2,6 +2,7 @@ package com.bidly.auctionservice.controller;
 
 import com.bidly.auctionservice.dto.ListingRequest;
 import com.bidly.auctionservice.dto.ListingResponse;
+import com.bidly.auctionservice.dto.AuctionScheduleRequest;
 import com.bidly.auctionservice.service.AuctionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -85,5 +86,13 @@ public class ListingController {
     public ResponseEntity<Void> deactivateListingsBySeller(@PathVariable Long sellerId) {
         auctionService.deactivateListingsBySeller(sellerId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/schedule")
+    public ResponseEntity<ListingResponse> scheduleAuction(
+            @PathVariable Long id,
+            @Valid @RequestBody AuctionScheduleRequest request
+    ) {
+        return ResponseEntity.ok(auctionService.scheduleAuction(id, request));
     }
 }

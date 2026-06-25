@@ -32,11 +32,8 @@ public class ListingRequest {
     @NotNull(message = "Seller ID is required")
     private Long sellerId;
 
-    @NotNull(message = "Start time is required")
     private LocalDateTime startTime;
 
-    @NotNull(message = "End time is required")
-    @Future(message = "End time must be in the future")
     private LocalDateTime endTime;
 
     @NotNull(message = "Reserve price is required")

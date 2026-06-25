@@ -161,8 +161,8 @@ const MyListings = ({ type, onViewDetails }) => {
         imageUrl: imageUrl || null,
         category,
         sellerId: userId,
-        startTime,
-        endTime,
+        startTime: startTime ? startTime : null,
+        endTime: endTime ? endTime : null,
         reservePrice: parseFloat(reservePrice),
         buyItNowPrice: buyItNowPrice ? parseFloat(buyItNowPrice) : null,
         bidIncrement: parseFloat(bidIncrement)
@@ -529,7 +529,7 @@ const MyListings = ({ type, onViewDetails }) => {
                     className="input-field" 
                     value={startTime} 
                     onChange={(e) => setStartTime(e.target.value)} 
-                    required 
+                    required={!!startTime || !!endTime} 
                     disabled={editLoading || editHasBids}
                   />
                 </div>
@@ -541,7 +541,7 @@ const MyListings = ({ type, onViewDetails }) => {
                     className="input-field" 
                     value={endTime} 
                     onChange={(e) => setEndTime(e.target.value)} 
-                    required 
+                    required={!!startTime || !!endTime} 
                     disabled={editLoading || editHasBids}
                   />
                 </div>

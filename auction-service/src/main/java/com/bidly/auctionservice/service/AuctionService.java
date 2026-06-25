@@ -56,24 +56,37 @@ public class AuctionService {
     @Transactional
     public ListingResponse createListing(ListingRequest request) {
         LocalDateTime now = LocalDateTime.now();
-        // Enforce start date must be starting now/future (with a small 1-minute buffer for latency)
-        if (request.getStartTime().isBefore(now.minusMinutes(1))) {
-            throw new IllegalArgumentException("Start time must be starting now or in the future.");
-        }
-        // Enforce end time is after start time
-        if (request.getEndTime().isBefore(request.getStartTime())) {
-            throw new IllegalArgumentException("End time must be after the start time.");
-        }
-        // Enforce end time is at most 6 months from the start time
-        if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
-            throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
-        }
 
         // Enforce KYC check for high-value categories
         if (isHighValueCategory(request.getCategory())) {
             UserDto seller = userClient.getUserById(request.getSellerId());
             if (seller == null || !Boolean.TRUE.equals(seller.getKycApproved())) {
                 throw new IllegalArgumentException("Sellers must be KYC-Approved to create listings in high-value categories like real estate or vehicles.");
+            }
+        }
+
+        // Validate reserve price and bid increment (required on creation)
+        if (request.getReservePrice() == null || request.getReservePrice().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Reserve price must be greater than 0.");
+        }
+        if (request.getBidIncrement() == null || request.getBidIncrement().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Bid increment must be greater than 0.");
+        }
+
+        boolean hasSchedule = request.getStartTime() != null || request.getEndTime() != null;
+
+        if (hasSchedule) {
+            if (request.getStartTime() == null || request.getEndTime() == null) {
+                throw new IllegalArgumentException("To schedule an auction immediately, both startTime and endTime must be provided.");
+            }
+            if (request.getStartTime().isBefore(now.minusMinutes(1))) {
+                throw new IllegalArgumentException("Start time must be starting now or in the future.");
+            }
+            if (request.getEndTime().isBefore(request.getStartTime())) {
+                throw new IllegalArgumentException("End time must be after the start time.");
+            }
+            if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
+                throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
             }
         }
 
@@ -91,12 +104,12 @@ public class AuctionService {
 
         BiddingSession session = BiddingSession.builder()
                 .listing(listing)
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
+                .startTime(hasSchedule ? request.getStartTime() : null)
+                .endTime(hasSchedule ? request.getEndTime() : null)
                 .reservePrice(request.getReservePrice())
-                .buyItNowPrice(request.getBuyItNowPrice())
+                .buyItNowPrice(hasSchedule ? request.getBuyItNowPrice() : null)
                 .bidIncrement(request.getBidIncrement())
-                .active(true)
+                .active(hasSchedule)
                 .build();
 
         session = sessionRepository.save(session);
@@ -526,8 +539,12 @@ public class AuctionService {
             // Do not allow updating key bidding parameters if bids have already been placed
             if (request.getReservePrice().compareTo(session.getReservePrice()) != 0 ||
                 request.getBidIncrement().compareTo(session.getBidIncrement()) != 0 ||
-                !request.getStartTime().isEqual(session.getStartTime()) ||
-                !request.getEndTime().isEqual(session.getEndTime()) ||
+                (request.getStartTime() == null && session.getStartTime() != null) ||
+                (request.getStartTime() != null && session.getStartTime() == null) ||
+                (request.getStartTime() != null && !request.getStartTime().isEqual(session.getStartTime())) ||
+                (request.getEndTime() == null && session.getEndTime() != null) ||
+                (request.getEndTime() != null && session.getEndTime() == null) ||
+                (request.getEndTime() != null && !request.getEndTime().isEqual(session.getEndTime())) ||
                 (request.getBuyItNowPrice() != null && session.getBuyItNowPrice() != null && request.getBuyItNowPrice().compareTo(session.getBuyItNowPrice()) != 0) ||
                 (request.getBuyItNowPrice() == null && session.getBuyItNowPrice() != null) ||
                 (request.getBuyItNowPrice() != null && session.getBuyItNowPrice() == null)) {
@@ -536,11 +553,22 @@ public class AuctionService {
         } else {
             // Safe to update bidding parameters
             LocalDateTime now = LocalDateTime.now();
-            if (request.getEndTime().isBefore(request.getStartTime())) {
-                throw new IllegalArgumentException("End time must be after the start time.");
-            }
-            if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
-                throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
+            if (request.getStartTime() != null || request.getEndTime() != null) {
+                if (request.getStartTime() == null || request.getEndTime() == null) {
+                    throw new IllegalArgumentException("To schedule an auction, both startTime and endTime must be provided.");
+                }
+                if (request.getStartTime().isBefore(now.minusMinutes(1))) {
+                    throw new IllegalArgumentException("Start time must be starting now or in the future.");
+                }
+                if (request.getEndTime().isBefore(request.getStartTime())) {
+                    throw new IllegalArgumentException("End time must be after the start time.");
+                }
+                if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
+                    throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
+                }
+                session.setActive(true);
+            } else {
+                session.setActive(false);
             }
             session.setStartTime(request.getStartTime());
             session.setEndTime(request.getEndTime());
@@ -750,5 +778,45 @@ public class AuctionService {
                 listingRepository.delete(listing);
             }
         }
+    }
+
+    @Transactional
+    public ListingResponse scheduleAuction(Long listingId, AuctionScheduleRequest request) {
+        log.info("Scheduling or updating auction for listingId={}", listingId);
+        Listing listing = listingRepository.findById(listingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Listing not found with id: " + listingId));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // Enforce time bounds
+        if (request.getStartTime().isBefore(now.minusMinutes(1))) {
+            throw new IllegalArgumentException("Start time must be starting now or in the future.");
+        }
+        if (request.getEndTime().isBefore(request.getStartTime())) {
+            throw new IllegalArgumentException("End time must be after the start time.");
+        }
+        if (request.getEndTime().isAfter(request.getStartTime().plusMonths(6))) {
+            throw new IllegalArgumentException("End time must be at most 6 months from the start time.");
+        }
+
+        BiddingSession session = listing.getBiddingSession();
+        if (session == null) {
+            throw new IllegalStateException("Bidding session record does not exist for listing with id: " + listingId);
+        } else {
+            // Update the existing session. First check if bids have been placed
+            if (session.getBids() != null && !session.getBids().isEmpty()) {
+                throw new IllegalArgumentException("Cannot modify active bidding parameters once bids have been placed.");
+            }
+            session.setStartTime(request.getStartTime());
+            session.setEndTime(request.getEndTime());
+            session.setBuyItNowPrice(request.getBuyItNowPrice());
+            session.setActive(true);
+        }
+
+        session = sessionRepository.save(session);
+        listing.setBiddingSession(session);
+        listingRepository.save(listing);
+
+        return mapToListingResponse(listing);
     }
 }

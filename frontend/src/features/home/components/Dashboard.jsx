@@ -66,6 +66,7 @@ const Dashboard = ({ onViewDetails, onCreateClick }) => {
   // Dynamic countdown timer component helper inside mapping
   const CountdownTimer = ({ endTime, isActive }) => {
     const calculateTimeLeft = () => {
+      if (!endTime) return { expired: true, text: 'Not Scheduled' };
       if (!isActive) return { expired: true, text: 'Ended' };
       const difference = +new Date(endTime) - +new Date();
       if (difference <= 0) return { expired: true, text: 'Ended' };
