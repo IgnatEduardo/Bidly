@@ -11,6 +11,7 @@ const CreateListing = ({ onBack, onSuccess }) => {
   const [reservePrice, setReservePrice] = useState('');
   const [buyItNowPrice, setBuyItNowPrice] = useState('');
   const [bidIncrement, setBidIncrement] = useState('10');
+  const [shouldSchedule, setShouldSchedule] = useState(true);
   
   const getNowString = () => {
     const now = new Date();
@@ -46,30 +47,47 @@ const CreateListing = ({ onBack, onSuccess }) => {
     e.preventDefault();
     setError('');
     
-    // Client-side validations
-    const now = new Date();
-    const minStart = new Date(now.getTime() - 60000); // 1-minute grace buffer for request delays
-    if (new Date(startTime) < minStart) {
-      setError('Start Time must be starting now or in the future.');
+    // reservePrice and bidIncrement are always required on listing creation
+    if (!reservePrice || !bidIncrement) {
+      setError('Please fill in Reserve Price and Bid Increment.');
       return;
     }
-    if (new Date(endTime) <= new Date(startTime)) {
-      setError('End Time must be after Start Time.');
-      return;
-    }
-    const maxEnd = new Date(startTime);
-    maxEnd.setMonth(maxEnd.getMonth() + 6);
-    if (new Date(endTime) > maxEnd) {
-      setError('End Time must be at most 6 months from the Start Time.');
-      return;
-    }
-    if (buyItNowPrice && parseFloat(buyItNowPrice) <= parseFloat(reservePrice)) {
-      setError('Buy It Now Price must be greater than Reserve Price.');
+    if (parseFloat(reservePrice) <= 0) {
+      setError('Reserve Price must be greater than 0.');
       return;
     }
     if (parseFloat(bidIncrement) <= 0) {
       setError('Bid Increment must be greater than 0.');
       return;
+    }
+
+    if (shouldSchedule) {
+      if (!startTime || !endTime) {
+        setError('Please fill in Start Time and End Time.');
+        return;
+      }
+
+      // Client-side validations for scheduling
+      const now = new Date();
+      const minStart = new Date(now.getTime() - 60000); // 1-minute grace buffer for request delays
+      if (new Date(startTime) < minStart) {
+        setError('Start Time must be starting now or in the future.');
+        return;
+      }
+      if (new Date(endTime) <= new Date(startTime)) {
+        setError('End Time must be after Start Time.');
+        return;
+      }
+      const maxEnd = new Date(startTime);
+      maxEnd.setMonth(maxEnd.getMonth() + 6);
+      if (new Date(endTime) > maxEnd) {
+        setError('End Time must be at most 6 months from the Start Time.');
+        return;
+      }
+      if (buyItNowPrice && parseFloat(buyItNowPrice) <= parseFloat(reservePrice)) {
+        setError('Buy It Now Price must be greater than Reserve Price.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -82,10 +100,10 @@ const CreateListing = ({ onBack, onSuccess }) => {
         imageUrl: imageUrl || null,
         category,
         sellerId: parseInt(sellerId),
-        startTime,
-        endTime,
+        startTime: shouldSchedule ? startTime : null,
+        endTime: shouldSchedule ? endTime : null,
         reservePrice: parseFloat(reservePrice),
-        buyItNowPrice: buyItNowPrice ? parseFloat(buyItNowPrice) : null,
+        buyItNowPrice: shouldSchedule && buyItNowPrice ? parseFloat(buyItNowPrice) : null,
         bidIncrement: parseFloat(bidIncrement)
       };
 
@@ -182,18 +200,6 @@ const CreateListing = ({ onBack, onSuccess }) => {
             </div>
 
             <div className="input-group">
-              <label>Buy It Now Price ($) (Optional)</label>
-              <input
-                type="number"
-                step="0.01"
-                className="input-field"
-                placeholder="e.g. 500.00 (Auction ends instantly if met)"
-                value={buyItNowPrice}
-                onChange={(e) => setBuyItNowPrice(e.target.value)}
-              />
-            </div>
-
-            <div className="input-group">
               <label>Bid Increment ($)</label>
               <input
                 type="number"
@@ -206,30 +212,65 @@ const CreateListing = ({ onBack, onSuccess }) => {
               />
             </div>
 
-            <div className="input-group">
-              <label>Start Time</label>
+            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '24px', marginBottom: '20px' }}>
               <input
-                type="datetime-local"
-                className="input-field"
-                value={startTime}
-                min={getNowString()}
-                onChange={(e) => setStartTime(e.target.value)}
-                required
+                type="checkbox"
+                id="shouldSchedule"
+                checked={shouldSchedule}
+                onChange={(e) => setShouldSchedule(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
               />
+              <label htmlFor="shouldSchedule" style={{ margin: 0, cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem' }}>
+                Schedule Auction Immediately
+              </label>
             </div>
 
-            <div className="input-group">
-              <label>End Time</label>
-              <input
-                type="datetime-local"
-                className="input-field"
-                value={endTime}
-                min={startTime}
-                max={getSixMonthsLaterString(startTime)}
-                onChange={(e) => setEndTime(e.target.value)}
-                required
-              />
-            </div>
+            {shouldSchedule ? (
+              <>
+                <div className="input-group">
+                  <label>Buy It Now Price ($) (Optional)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="input-field"
+                    placeholder="e.g. 500.00 (Auction ends instantly if met)"
+                    value={buyItNowPrice}
+                    onChange={(e) => setBuyItNowPrice(e.target.value)}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label>Start Time</label>
+                  <input
+                    type="datetime-local"
+                    className="input-field"
+                    value={startTime}
+                    min={getNowString()}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label>End Time</label>
+                  <input
+                    type="datetime-local"
+                    className="input-field"
+                    value={endTime}
+                    min={startTime}
+                    max={getSixMonthsLaterString(startTime)}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    required
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="info-box" style={{ background: '#161b22', padding: '16px', borderRadius: '8px', border: '1px dashed #30363d', color: '#8b949e', fontSize: '0.9rem' }}>
+                ℹ️ You are choosing to list this item without scheduling an active auction session right now. Other clients will see the item listing details, but they will not be able to place bids. 
+                <br/><br/>
+                You can schedule and launch the auction later from the listing details view.
+              </div>
+            )}
           </div>
         </div>
 
@@ -238,7 +279,7 @@ const CreateListing = ({ onBack, onSuccess }) => {
             Cancel
           </button>
           <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? 'Creating...' : 'Launch Auction'}
+            {loading ? 'Creating...' : shouldSchedule ? 'Launch Auction' : 'Create Listing'}
           </button>
         </div>
       </form>
