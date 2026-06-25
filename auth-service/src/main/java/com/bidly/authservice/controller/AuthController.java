@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,7 +22,6 @@ public class AuthController {
             @Valid @RequestBody RegisterRequest registerRequest
     ) {
         RegisterResponse registerResponse = authService.register(registerRequest);
-
         return new ResponseEntity<>(registerResponse, HttpStatus.CREATED);
     }
 
@@ -30,7 +30,6 @@ public class AuthController {
             @RequestParam("token") String token
     ) {
         String response = authService.confirmAccount(token);
-
         return ResponseEntity.ok(response);
     }
 
@@ -42,14 +41,39 @@ public class AuthController {
     }
 
     @PostMapping("/refresh-token")
-    public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest tokenRefreshRequest) {
+    public ResponseEntity<TokenRefreshResponse> refreshToken(
+            @Valid @RequestBody TokenRefreshRequest tokenRefreshRequest
+    ) {
         return ResponseEntity.ok(authService.refreshToken(tokenRefreshRequest));
     }
 
     @PostMapping("/logout")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
     public ResponseEntity<String> logout(@AuthenticationPrincipal User user) {
         authService.logout(user);
         return ResponseEntity.ok("Logout successful");
+    }
+
+    @GetMapping("/users/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
+    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
+        return  ResponseEntity.ok(authService.getUserById(id));
+    }
+
+    @PutMapping("/users/{id}")
+    @PreAuthorize("hasAnyAuthority('USER', 'ADMIN')")
+    public ResponseEntity<UpdateUserResponse> updateUser(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUserRequest request
+    ) {
+        return ResponseEntity.ok(authService.updateUser(id, request));
+    }
+
+    @DeleteMapping("/users/{id}")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        authService.deleteUser(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/users/{id}/kyc")
@@ -58,10 +82,5 @@ public class AuthController {
             @RequestParam boolean approved
     ) {
         return ResponseEntity.ok(authService.toggleKyc(id, approved));
-    }
-
-    @GetMapping("/users/{id}")
-    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
-        return ResponseEntity.ok(authService.getUserById(id));
     }
 }
