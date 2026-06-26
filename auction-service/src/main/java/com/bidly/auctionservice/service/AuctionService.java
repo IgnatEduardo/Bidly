@@ -165,7 +165,7 @@ public class AuctionService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. Validation checks
+        // Validation checks
         if (!session.getActive()) {
             throw new InvalidBidException("Bidding session is no longer active");
         }
@@ -187,7 +187,7 @@ public class AuctionService {
             }
         }
 
-        // 2. Fetch current highest bid
+        // Fetch current highest bid
         List<Bid> bids = bidRepository.findByBiddingSessionIdOrderByAmountDesc(session.getId());
         Bid currentHighestBid = bids.isEmpty() ? null : bids.get(0);
 
@@ -206,18 +206,18 @@ public class AuctionService {
             throw new InvalidBidException("Bid amount " + request.getAmount() + " must be at least " + minRequiredBid);
         }
 
-        // 3. Escrow locking (10% of bid amount)
+        // Escrow locking (10% of bid amount)
         BigDecimal requiredEscrow = request.getAmount().multiply(ESCROW_RATE);
         walletService.lockFunds(request.getBidderId(), requiredEscrow);
 
-        // 4. Release previous highest bidder's escrow
+        // Release previous highest bidder's escrow
         if (currentHighestBid != null) {
             BigDecimal previousEscrow = currentHighestBid.getAmount().multiply(ESCROW_RATE);
             walletService.releaseFunds(currentHighestBid.getBidderId(), previousEscrow);
             log.info("Released escrow of {} for previous bidder {}", previousEscrow, currentHighestBid.getBidderId());
         }
 
-        // 5. Save the new bid
+        // Save the new bid
         Bid bid = Bid.builder()
                 .biddingSession(session)
                 .bidderId(request.getBidderId())
@@ -226,7 +226,7 @@ public class AuctionService {
                 .build();
         bid = bidRepository.save(bid);
 
-        // 6. Anti-sniping logic (Popcorn bidding): extend timer by 5 minutes if placed within the last 5 minutes
+        // Anti-sniping logic (Popcorn bidding): extend timer by 5 minutes if placed within the last 5 minutes
         long minutesLeft = ChronoUnit.MINUTES.between(now, session.getEndTime());
         if (minutesLeft < 5) {
             LocalDateTime originalEndTime = session.getEndTime();
@@ -234,7 +234,7 @@ public class AuctionService {
             log.info("Anti-sniping triggered. Extended auction {} end time from {} to {}", session.getId(), originalEndTime, session.getEndTime());
         }
 
-        // 7. Buy It Now logic
+        // Buy It Now logic
         if (session.getBuyItNowPrice() != null && request.getAmount().compareTo(session.getBuyItNowPrice()) >= 0) {
             session.setActive(false);
             session.setEndTime(now);
@@ -259,7 +259,7 @@ public class AuctionService {
             log.error("Failed to broadcast WebSocket message for bid: {}", e.getMessage());
         }
 
-        // 8. Publish RabbitMQ events
+        // Publish RabbitMQ events
         try {
             UserDto bidder = userClient.getUserById(request.getBidderId());
             if (bidder != null) {

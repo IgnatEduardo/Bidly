@@ -32,7 +32,7 @@ public class DataInitializer implements CommandLineRunner {
         Role userRole = roleRepository.findByName(Rolename.USER)
                 .orElseGet(() -> roleRepository.save(Role.builder().name(Rolename.USER).build()));
 
-        if (!userRepository.existsByUsername("admin1")) {
+        if (!userRepository.existsByUsername("admin1") && !userRepository.existsByEmail("admin1@bidly.com")) {
             User admin1 = User.builder()
                     .firstName("Andrei")
                     .lastName("Admin")
@@ -48,7 +48,7 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Default Admin 1 created.");
         }
 
-        if (!userRepository.existsByUsername("admin2")) {
+        if (!userRepository.existsByUsername("admin2") && !userRepository.existsByEmail("admin2@bidly.com")) {
             User admin2 = User.builder()
                     .firstName("Maria")
                     .lastName("Boss")
@@ -65,7 +65,7 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         // USER
-        if (!userRepository.existsByUsername("user1")) {
+        if (!userRepository.existsByUsername("user1") && !userRepository.existsByEmail("user1@gmail.com")) {
             User user1 = User.builder()
                     .firstName("Ionut")
                     .lastName("Popescu")
@@ -81,7 +81,7 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Default User 1 created.");
         }
 
-        if (!userRepository.existsByUsername("user2")) {
+        if (!userRepository.existsByUsername("user2") && !userRepository.existsByEmail("user2@gmail.com")) {
             User user2 = User.builder()
                     .firstName("Elena")
                     .lastName("Ionescu")
@@ -97,7 +97,7 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Default User 2 created.");
         }
 
-        if (!userRepository.existsByUsername("user3")) {
+        if (!userRepository.existsByUsername("user3") && !userRepository.existsByEmail("user3@gmail.com")) {
             User user3 = User.builder()
                     .firstName("Vlad")
                     .lastName("Nistor")
